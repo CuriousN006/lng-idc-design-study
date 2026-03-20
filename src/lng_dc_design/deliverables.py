@@ -70,196 +70,231 @@ def build_report(project_root: Path) -> Path:
     long_distance = distance.sort_values("distance_km").iloc[-1]
     best_temp = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw").iloc[0]
     annual_report = annual.copy()
-    annual_report["value"] = annual_report.apply(
+    annual_report["항목"] = annual_report["metric"].replace(
+        {
+            "Baseline electricity use": "기준 시스템 전력사용",
+            "LNG electricity use": "LNG 시스템 전력사용",
+            "Electricity saving": "전력 절감",
+            "Electricity cost saving": "전력요금 절감",
+            "Avoided indirect emissions": "회피 간접배출",
+        }
+    )
+    annual_report["값"] = annual_report.apply(
         lambda row: _format_number(float(row["value"]) / 1_000_000.0)
         if row["metric"] == "Electricity cost saving"
         else _format_number(float(row["value"])),
         axis=1,
     )
+    annual_report["단위"] = annual_report.apply(
+        lambda row: (
+            "백만원/년"
+            if row["metric"] == "Electricity cost saving"
+            else "MWh/년"
+            if row["unit"] == "MWh/year"
+            else "tCO2/년"
+            if row["unit"] == "tCO2/year"
+            else row["unit"]
+        ),
+        axis=1,
+    )
+    alternatives_table = pd.DataFrame(
+        {
+            "유체": alternatives["fluid"],
+            "스크리닝 점수": alternatives["screening_score"].map(lambda x: _format_number(x, 3)),
+            "펌프동력 (kW)": alternatives["pump_power_kw"].map(_format_number),
+            "쉘 직경 (m)": alternatives["hx_shell_diameter_m"].map(lambda x: _format_number(x, 3)),
+            "연간 비용절감 (백만원/년)": alternatives["annual_cost_saving_krw"].map(
+                lambda x: _format_number(x / 1_000_000.0)
+            ),
+        }
+    )
+    distance_table = pd.DataFrame(
+        {
+            "거리 (km)": distance["distance_km"].map(_format_number),
+            "펌프동력 (kW)": distance["pump_power_kw"].map(_format_number),
+            "열유입 (kW)": distance["heat_gain_kw"].map(_format_number),
+            "열여유 (kW)": distance["thermal_margin_kw"].map(_format_number),
+            "IDC 부하 충족": distance["meets_idc_load"].map(lambda x: "예" if bool(x) else "아니오"),
+        }
+    )
+    temperature_table = pd.DataFrame(
+        {
+            "공급온도 (°C)": temperature["supply_temp_c"].map(_format_number),
+            "선정 유체": temperature["selected_fluid"].fillna("-"),
+            "펌프동력 (kW)": temperature["pump_power_kw"].map(_format_number),
+            "최대 성립거리 (km)": temperature["max_feasible_distance_km"].map(_format_number),
+            "35 km 충족": temperature["long_distance_meets_load"].map(lambda x: "예" if bool(x) else "아니오"),
+            "상태": temperature["status"].replace({"feasible": "성립", "failed": "실패"}),
+        }
+    )
+    legacy_table = pd.DataFrame(
+        {
+            "항목": legacy["metric"].replace(
+                {
+                    "Theoretical minimum power": "이론 최소동력",
+                    "Baseline compressor power": "기준 압축기 동력",
+                }
+            ),
+            "기존 엑셀 (kW)": legacy["legacy_value_kw"].map(_format_number),
+            "현재 코드 (kW)": legacy["current_value_kw"].map(_format_number),
+            "차이 (kW)": legacy["difference_kw"].map(_format_number),
+            "차이율 (%)": legacy["difference_percent"].map(lambda x: _format_number(x, 2)),
+        }
+    )
 
     report_path = deliverables_dir / "report_draft.md"
     report_lines = [
-        "# LNG Cold-Energy Based IDC Cooling System Design Study",
+        "# LNG 냉열 기반 IDC 냉각시스템 설계 연구",
         "",
-        "## Abstract",
+        "## 초록",
         "",
         (
-            "This report reconstructs the 2022 thermal system design project as a reproducible Python-based study for a "
-            "large-scale internet data center cooled by LNG cold energy. The final design delivers a modeled cooling load of "
-            f"**{_format_number(float(summary['IDC total cooling load']['value']))} kW** while reducing the reference "
-            f"R-134a compressor power requirement from **{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW** "
-            f"to an LNG loop pumping demand of **{_format_number(float(summary['LNG system pump power']['value']))} kW**. "
-            f"The selected coolant is **{summary['Selected coolant']['value']}**, the LNG vaporizer pinch constraint is "
-            f"held at **10.0 K**, and the estimated annual electricity saving is "
-            f"**{_format_number(float(summary['Annual electricity saving']['value']))} MWh/year**."
+            "본 보고서는 2022년 열시스템디자인 과제를 재현 가능한 Python 기반 설계 연구로 다시 구성한 결과다. "
+            "LNG 냉열을 활용한 최종 설계는 "
+            f"**{_format_number(float(summary['IDC total cooling load']['value']))} kW**의 IDC 냉방부하를 만족하면서, "
+            f"기준 R-134a 압축기 동력 **{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW**를 "
+            f"LNG 루프 펌프동력 **{_format_number(float(summary['LNG system pump power']['value']))} kW** 수준으로 대체한다. "
+            f"선정된 냉각유체는 **{summary['Selected coolant']['value']}**이며, LNG 기화기 최소 핀치는 **10.0 K**로 유지했고, "
+            f"예상 연간 전력 절감량은 **{_format_number(float(summary['Annual electricity saving']['value']))} MWh/년**이다."
         ),
         "",
-        "## 1. Problem Definition",
+        "## 1. 문제 정의",
         "",
-        "The project objective is to use LNG cold energy to replace a conventional mechanical cooling load in a data center while satisfying the original assignment constraints on room conditions, chilled-water conditions, vaporizer duty, and pipeline distance.",
+        "본 프로젝트의 목적은 LNG 냉열을 이용해 데이터센터의 기존 기계식 냉방부하를 대체하되, 과제에서 제시한 실내 조건, 냉수 조건, 기화기 duty, 배관 이송거리 제약을 동시에 만족하는 설계를 도출하는 것이다.",
         "",
-        "Key questions addressed in this study are:",
+        "이 연구가 답하려는 핵심 질문은 다음과 같다.",
         "",
-        "- What is the total cooling load of the target IDC?",
-        "- What is the theoretical lower bound on power consumption?",
-        "- How does a conventional R-134a reference cycle compare with an LNG-assisted system?",
-        "- Which coolant is most suitable for the LNG-to-IDC secondary loop?",
-        "- Is the system still feasible when the transport distance increases from 10 km to 35 km?",
-        "- What are the annual energy, cost, and carbon implications?",
+        "- 대상 IDC의 총 냉방부하는 얼마인가?",
+        "- 요구 조건에서 이론 최소동력은 어느 수준인가?",
+        "- 기존 R-134a 기준 시스템과 LNG 보조 시스템은 어떻게 비교되는가?",
+        "- LNG와 IDC 사이 2차 루프에 가장 적합한 냉각유체는 무엇인가?",
+        "- 이송거리가 10 km에서 35 km로 증가해도 시스템이 성립하는가?",
+        "- 연간 전력, 비용, 탄소 효과는 어느 정도인가?",
         "",
-        "## 2. Design Basis",
+        "## 2. 설계 기준",
         "",
-        "- Assignment-derived design basis is recorded in [base.toml](../config/base.toml).",
-        "- Full source registry is recorded in [sources.md](../docs/sources.md).",
-        "- Engineering assumptions are recorded in [assumptions.md](../docs/assumptions.md).",
+        "- 과제 기반 입력값은 [base.toml](../config/base.toml)에 기록했다.",
+        "- 전체 출처 레지스트리는 [sources.md](../docs/sources.md)에 정리했다.",
+        "- 공학적 가정은 [assumptions.md](../docs/assumptions.md)에 따로 남겼다.",
         "",
-        "Core basis values:",
+        "핵심 입력값은 다음과 같다.",
         "",
-        f"- IDC total cooling load: **{_format_number(float(summary['IDC total cooling load']['value']))} kW**",
-        f"- LNG / NG duty requirement: **{_format_number(float(summary['LNG vaporizer duty']['value']))} kW**",
-        f"- Baseline R-134a compressor power: **{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW**",
-        f"- Selected coolant: **{summary['Selected coolant']['value']}**",
+        f"- IDC 총 냉방부하: **{_format_number(float(summary['IDC total cooling load']['value']))} kW**",
+        f"- LNG / NG 기화 duty: **{_format_number(float(summary['LNG vaporizer duty']['value']))} kW**",
+        f"- 기준 R-134a 압축기 동력: **{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW**",
+        f"- 선정 냉각유체: **{summary['Selected coolant']['value']}**",
         "",
-        "## 3. Modeling Approach",
+        "## 3. 모델링 방법",
         "",
-        "The codebase separates the project into load calculation, theoretical minimum power, baseline vapor-compression benchmarking, coolant screening, LNG vaporizer design, long-distance pipeline design, sensitivity studies, and annualized impact analysis.",
+        "코드는 부하 계산, 이론 최소동력, 기준 증기압축 사이클, 냉각유체 스크리닝, LNG 기화기 설계, 장거리 배관 설계, 민감도 분석, 연간 효과 계산으로 나누어 구성했다.",
         "",
-        "Main analysis outputs are generated by the following figures:",
+        "주요 결과는 아래 그림들로 요약된다.",
         "",
-        "![Load Breakdown](../output/figures/load_breakdown.png)",
+        "![부하 구성](../output/figures/load_breakdown.png)",
         "",
-        "![Baseline Cycle](../output/figures/baseline_cycle_ph.png)",
+        "![기준 사이클](../output/figures/baseline_cycle_ph.png)",
         "",
-        "![Coolant Ranking](../output/figures/fluid_ranking.png)",
+        "![냉각유체 순위](../output/figures/fluid_ranking.png)",
         "",
-        "![HX Profile](../output/figures/hx_temperature_profile.png)",
+        "![열교환기 온도 프로파일](../output/figures/hx_temperature_profile.png)",
         "",
-        "![Pipeline Tradeoff](../output/figures/pipeline_tradeoff.png)",
+        "![배관 트레이드오프](../output/figures/pipeline_tradeoff.png)",
         "",
-        "## 4. Main Results",
+        "## 4. 주요 결과",
         "",
         _markdown_table(
             pd.DataFrame(
                 [
-                    {"Metric": "Cooling load", "Value": f"{_format_number(float(summary['IDC total cooling load']['value']))} kW"},
-                    {"Metric": "Theoretical minimum power", "Value": f"{_format_number(float(summary['Theoretical minimum power']['value']))} kW"},
-                    {"Metric": "Baseline R-134a power", "Value": f"{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW"},
-                    {"Metric": "Selected coolant", "Value": summary["Selected coolant"]["value"]},
-                    {"Metric": "LNG loop pump power", "Value": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
-                    {"Metric": "Power saving", "Value": f"{_format_number(float(summary['Baseline-to-LNG power saving']['value']))} kW"},
+                    {"항목": "냉방부하", "값": f"{_format_number(float(summary['IDC total cooling load']['value']))} kW"},
+                    {"항목": "이론 최소동력", "값": f"{_format_number(float(summary['Theoretical minimum power']['value']))} kW"},
+                    {"항목": "기준 R-134a 동력", "값": f"{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW"},
+                    {"항목": "선정 냉각유체", "값": summary["Selected coolant"]["value"]},
+                    {"항목": "LNG 루프 펌프동력", "값": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
+                    {"항목": "전력 절감", "값": f"{_format_number(float(summary['Baseline-to-LNG power saving']['value']))} kW"},
                 ]
             ),
-            ["Metric", "Value"],
+            ["항목", "값"],
         ),
         "",
-        "### 4.1 Coolant Selection",
+        "### 4.1 냉각유체 선정",
         "",
-        _markdown_table(
-            alternatives.assign(
-                screening_score=alternatives["screening_score"].map(lambda x: _format_number(x, 3)),
-                pump_power_kw=alternatives["pump_power_kw"].map(_format_number),
-                hx_shell_diameter_m=alternatives["hx_shell_diameter_m"].map(lambda x: _format_number(x, 3)),
-                annual_cost_saving_krw=alternatives["annual_cost_saving_krw"].map(lambda x: _format_number(x / 1_000_000.0)),
-            ),
-            ["fluid", "screening_score", "pump_power_kw", "hx_shell_diameter_m", "annual_cost_saving_krw"],
-        ),
+        _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "펌프동력 (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"]),
         "",
-        "The base-case optimum is **"
-        f"{selected_alternative['fluid']}**, which minimizes loop pumping demand while preserving a feasible LNG vaporizer and pipeline design.",
+        f"기본 설계점에서 최적 유체는 **{selected_alternative['fluid']}**였으며, 이는 LNG 기화기와 장거리 배관 설계를 모두 만족하는 범위 안에서 루프 펌프동력을 최소화했다.",
         "",
-        "### 4.2 Distance Sensitivity",
+        "### 4.2 거리 민감도",
         "",
-        _markdown_table(
-            distance.assign(
-                distance_km=distance["distance_km"].map(_format_number),
-                pump_power_kw=distance["pump_power_kw"].map(_format_number),
-                heat_gain_kw=distance["heat_gain_kw"].map(_format_number),
-                thermal_margin_kw=distance["thermal_margin_kw"].map(_format_number),
-            ),
-            ["distance_km", "pump_power_kw", "heat_gain_kw", "thermal_margin_kw", "meets_idc_load"],
-        ),
+        _markdown_table(distance_table, ["거리 (km)", "펌프동력 (kW)", "열유입 (kW)", "열여유 (kW)", "IDC 부하 충족"]),
         "",
-        "![Distance Sensitivity](../output/figures/pipeline_distance_sensitivity.png)",
+        "![거리 민감도](../output/figures/pipeline_distance_sensitivity.png)",
         "",
         (
-            f"The long-distance case at **{_format_number(long_distance['distance_km'])} km** is "
-            f"**{'feasible' if bool(long_distance['meets_idc_load']) else 'not feasible'}** under the current duty margin. "
-            f"The estimated maximum feasible one-way distance for the selected design is about "
-            f"**{_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km**."
+            f"현재 duty 여유 기준에서 **{_format_number(long_distance['distance_km'])} km** 장거리 조건은 "
+            f"**{'성립' if bool(long_distance['meets_idc_load']) else '불성립'}**이다. "
+            f"선정 설계의 추정 최대 편도 성립거리는 약 **{_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km**다."
         ),
         "",
-        "### 4.3 Supply Temperature Sensitivity",
+        "### 4.3 공급온도 민감도",
         "",
-        _markdown_table(
-            temperature.assign(
-                supply_temp_c=temperature["supply_temp_c"].map(_format_number),
-                pump_power_kw=temperature["pump_power_kw"].map(_format_number),
-                max_feasible_distance_km=temperature["max_feasible_distance_km"].map(_format_number),
-            ),
-            ["supply_temp_c", "selected_fluid", "pump_power_kw", "max_feasible_distance_km", "long_distance_meets_load", "status"],
-        ),
+        _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "펌프동력 (kW)", "최대 성립거리 (km)", "35 km 충족", "상태"]),
         "",
-        "![Supply Temperature Sensitivity](../output/figures/supply_temperature_sensitivity.png)",
+        "![공급온도 민감도](../output/figures/supply_temperature_sensitivity.png)",
         "",
         (
-            f"The best pump-power point in the temperature sweep is **{_format_number(best_temp['supply_temp_c'])} C**, "
-            f"which retains **{best_temp['selected_fluid']}** as the preferred fluid. "
-            f"A warmer supply temperature of **-43.1 C** makes the 35 km case feasible, but only after switching to **R-600a** "
-            f"and accepting a much larger pumping demand."
+            f"공급온도 스윕에서 펌프동력이 가장 낮은 지점은 **{_format_number(best_temp['supply_temp_c'])} °C**이며, "
+            f"이때도 우선 유체는 **{best_temp['selected_fluid']}**로 유지된다. "
+            f"반면 **-43.1 °C** 수준으로 공급온도를 높이면 35 km 조건을 만족시킬 수 있지만, **R-600a**로 바뀌고 펌프동력 증가를 감수해야 한다."
         ),
         "",
-        "### 4.4 Annual Impact",
+        "### 4.4 연간 효과",
         "",
-        _markdown_table(annual_report, ["metric", "value", "unit"]),
+        _markdown_table(annual_report, ["항목", "값", "단위"]),
         "",
-        "![Annual Impact](../output/figures/annual_impact_comparison.png)",
+        "![연간 효과](../output/figures/annual_impact_comparison.png)",
         "",
-        "Allowable additional investment based on simple payback targets:",
+        "단순 회수기간 기준 허용 가능한 추가 투자비는 다음과 같다.",
         "",
         _markdown_table(
             payback.assign(
-                allowable_incremental_capex_krw=payback["allowable_incremental_capex_krw"].map(lambda x: f"{_format_number(x / 1_000_000.0)} million KRW")
+                **{
+                    "회수기간 (년)": payback["payback_years"],
+                    "허용 추가 투자비 (백만원)": payback["allowable_incremental_capex_krw"].map(
+                        lambda x: _format_number(x / 1_000_000.0)
+                    ),
+                }
             ),
-            ["payback_years", "allowable_incremental_capex_krw"],
+            ["회수기간 (년)", "허용 추가 투자비 (백만원)"],
         ),
         "",
-        "## 5. Comparison with Legacy Excel Work",
+        "## 5. 기존 엑셀 결과와 비교",
         "",
-        _markdown_table(
-            legacy.assign(
-                legacy_value_kw=legacy["legacy_value_kw"].map(_format_number),
-                current_value_kw=legacy["current_value_kw"].map(_format_number),
-                difference_kw=legacy["difference_kw"].map(_format_number),
-                difference_percent=legacy["difference_percent"].map(lambda x: _format_number(x, 2)),
-            ),
-            ["metric", "legacy_value_kw", "current_value_kw", "difference_kw", "difference_percent"],
-        ),
+        _markdown_table(legacy_table, ["항목", "기존 엑셀 (kW)", "현재 코드 (kW)", "차이 (kW)", "차이율 (%)"]),
         "",
-        "The recreated Python workflow is consistent with the historical spreadsheet at the system level, while making the assumptions, source traceability, and scenario studies explicit.",
+        "새 Python 워크플로우는 시스템 수준에서 기존 스프레드시트와 같은 규모의 결과를 재현하면서도, 가정과 출처, 시나리오 분석을 더 명확하게 드러낸다.",
         "",
-        "## 6. Discussion",
+        "## 6. 논의",
         "",
-        "- The base 10 km system is feasible with a large power reduction relative to the baseline compressor load.",
-        "- The 35 km case is not feasible at the current duty margin for the base design point, which is itself a useful design conclusion rather than a failure.",
-        "- A temperature-level shift can extend feasible distance, but it may require a different coolant and a higher loop pumping penalty.",
-        "- The annualized economics are strong under the current boundary definition, but the comparison currently excludes detailed auxiliary equipment, maintenance, financing, and LNG infrastructure CAPEX.",
+        "- 기본 10 km 설계는 기준 압축기 시스템 대비 큰 전력 절감과 함께 성립한다.",
+        "- 35 km 조건은 현재 기본 설계점에서 성립하지 않으며, 이것 자체가 중요한 설계 결론이다.",
+        "- 공급온도 수준을 조정하면 성립 거리를 늘릴 수 있지만, 다른 유체 선택과 더 큰 펌프동력 페널티를 수반한다.",
+        "- 연간 경제성은 현재 경계조건에서 매우 유리하지만, 보조기기, 유지보수, 금융비용, LNG 인프라 CAPEX는 아직 포함하지 않았다.",
         "",
-        "## 7. Limitations",
+        "## 7. 한계",
         "",
-        "- LNG is modeled as pure methane in v1.",
-        "- The IDC-side distribution network is simplified into a cooling-duty boundary rather than a full hydraulic network.",
-        "- The economic comparison boundary is limited to baseline compressor power versus LNG loop pump power.",
-        "- Detailed mechanical design checks such as stress, materials procurement, and controls integration are outside the present scope.",
+        "- v1에서는 LNG를 순수 메탄으로 가정했다.",
+        "- IDC 측 분배 네트워크는 전체 유압망이 아니라 냉방 duty 경계조건으로 단순화했다.",
+        "- 경제성 비교 범위는 기준 압축기 동력과 LNG 루프 펌프동력 비교에 한정된다.",
+        "- 응력, 재료 조달, 제어 통합 같은 상세 기계설계 검토는 현재 범위 밖이다.",
         "",
-        "## 8. Conclusion",
+        "## 8. 결론",
         "",
         (
-            "The reconstructed project shows that an LNG cold-energy cooling concept can strongly reduce the modeled electrical demand of the reference data-center cooling system at the 10 km design point. "
-            "The selected base design uses ammonia in the secondary loop, a shell-and-tube LNG vaporizer, and a 0.35 m supply/return pipeline pair. "
-            "The design is energy-efficient, economically attractive under the present boundary, and transparent enough to support further report refinement and presentation work."
+            "재구축된 프로젝트는 LNG 냉열 기반 냉각 개념이 10 km 설계점에서 기준 데이터센터 냉각 시스템의 전력 요구를 크게 줄일 수 있음을 보여준다. "
+            "선정된 기본안은 2차 루프에 암모니아를 사용하고, 쉘-튜브 LNG 기화기와 0.35 m 공급/환수 배관을 적용한다. "
+            "현재 경계조건에서 이 설계는 에너지 측면과 경제성 측면 모두 매력적이며, 후속 보고서 정리와 발표자료 고도화까지 연결할 수 있을 만큼 투명하다."
         ),
         "",
-        "## References",
+        "## 참고문헌",
         "",
     ]
     for source_id in ["SRC-001", "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008", "SRC-009", "SRC-010", "SRC-011", "SRC-012", "SRC-013", "SRC-014"]:
@@ -290,60 +325,60 @@ def build_presentation_script(project_root: Path) -> Path:
     }
 
     script_lines = [
-        "# Presentation Script",
+        "# 발표 스크립트",
         "",
-        "## Slide 1. Title and Core Message",
-        "- Open with the design question: can LNG cold energy replace a conventional data-center cooling duty?",
-        "- Emphasize that the project is now a reproducible, code-based engineering study rather than a one-off spreadsheet.",
-        f"- Highlight the three anchor numbers immediately: cooling load {_format_number(float(summary['IDC total cooling load']['value']))} kW, baseline compressor power {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW, LNG pump power {_format_number(float(summary['LNG system pump power']['value']))} kW.",
+        "## 슬라이드 1. 제목과 핵심 메시지",
+        "- 첫 문장은 설계 질문으로 시작한다. LNG 냉열로 기존 데이터센터 냉방부하를 대체할 수 있는가를 바로 던진다.",
+        "- 이번 결과는 일회성 스프레드시트가 아니라 재현 가능한 코드 기반 설계 연구라는 점을 강조한다.",
+        f"- 앵커 숫자 세 개를 먼저 제시한다. 냉방부하 {_format_number(float(summary['IDC total cooling load']['value']))} kW, 기준 압축기 동력 {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW, LNG 루프 펌프동력 {_format_number(float(summary['LNG system pump power']['value']))} kW다.",
         "",
-        "## Slide 2. Design Question and Basis",
-        "- Frame the assignment constraints before showing any design result.",
-        "- Use the modeled cooling load and the transport-distance requirement as the two hardest assignment constraints.",
-        "- Call out that sources and assumptions are explicitly tracked inside the project repository.",
+        "## 슬라이드 2. 설계 질문과 기준",
+        "- 결과를 보여주기 전에 과제 제약조건을 먼저 정리한다.",
+        "- 모델링된 냉방부하와 장거리 이송조건이 가장 빡빡한 제약이라는 점을 짚는다.",
+        "- 모든 출처와 가정을 저장소 안에서 추적 가능하게 관리했다는 점을 말한다.",
         "",
-        "## Slide 3. System Concept",
-        "- Explain the architecture in one sentence: LNG cold energy chills a secondary loop, and that loop transports duty to the IDC.",
-        "- Mention the two design bottlenecks: vaporizer pinch and long-distance transport penalty.",
-        f"- State the current base-case fluid choice: {summary['Selected coolant']['value']}.",
+        "## 슬라이드 3. 시스템 개념",
+        "- LNG 냉열이 2차 루프를 냉각하고, 그 루프가 IDC까지 냉열을 운반하는 구조를 한 문장으로 설명한다.",
+        "- 설계를 가르는 핵심 병목은 기화기 핀치와 장거리 이송 페널티라고 정리한다.",
+        f"- 현재 기본안의 냉각유체는 {summary['Selected coolant']['value']}라고 명시한다.",
         "",
-        "## Slide 4. Benchmark Against the Reference Cycle",
-        f"- Theoretical minimum power is {_format_number(float(summary['Theoretical minimum power']['value']))} kW.",
-        f"- Reference R-134a compressor power is {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW.",
-        f"- The modeled LNG loop pump demand is only {_format_number(float(summary['LNG system pump power']['value']))} kW, which defines the main energy argument.",
+        "## 슬라이드 4. 기준 사이클 대비 성능",
+        f"- 이론 최소동력은 {_format_number(float(summary['Theoretical minimum power']['value']))} kW다.",
+        f"- 기준 R-134a 압축기 동력은 {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW다.",
+        f"- LNG 루프 펌프동력은 {_format_number(float(summary['LNG system pump power']['value']))} kW 수준으로 매우 낮으며, 이것이 핵심 에너지 논거라고 설명한다.",
         "",
-        "## Slide 5. Coolant Selection",
-        f"- Present {selected_alternative['fluid']} as the base-case winner, not as an arbitrary choice but as the best trade-off in the modeled ranking.",
-        "- Explain that the screening compares feasibility, pumping demand, heat-exchanger scale, and downstream annual benefit.",
-        "- Position propane and isobutane as useful alternatives rather than discarded options.",
+        "## 슬라이드 5. 냉각유체 선정",
+        f"- {selected_alternative['fluid']}는 임의 선택이 아니라 모델링된 순위에서 가장 좋은 균형점을 보인 기본안이라고 설명한다.",
+        "- 스크리닝은 성립 여부, 펌프동력, 열교환기 규모, 연간 절감 효과를 함께 비교한 결과라고 말한다.",
+        "- 프로판과 이소부탄은 탈락품이 아니라 후순위 대안으로 제시한다.",
         "",
-        "## Slide 6. Transport-Distance Constraint",
-        f"- State the base result clearly: maximum feasible one-way distance is about {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km.",
-        f"- Therefore the {int(long_distance['distance_km'])} km case is {'feasible' if bool(long_distance['meets_idc_load']) else 'not feasible'} at the current design point.",
-        "- Use this as a design insight, not as a failure: transport distance is the real system constraint after the base 10 km case closes.",
+        "## 슬라이드 6. 이송거리 제약",
+        f"- 기본 결과를 명확히 말한다. 추정 최대 편도 성립거리는 약 {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km다.",
+        f"- 따라서 현재 설계점에서 {int(long_distance['distance_km'])} km 조건은 {'성립' if bool(long_distance['meets_idc_load']) else '불성립'}이라고 정리한다.",
+        "- 이 결과를 실패가 아니라 설계 통찰로 제시한다. 10 km가 닫힌 뒤 진짜 제약은 이송거리라는 뜻이다.",
         "",
-        "## Slide 7. Temperature Trade-off",
-        "- Explain that a warmer supply temperature increases transport feasibility but also changes the fluid preference and pumping penalty.",
-        "- Show that recovering 35 km is possible only by moving the operating point, not by assuming the base design magically stretches that far.",
+        "## 슬라이드 7. 공급온도 상충관계",
+        "- 공급온도를 높이면 이송 가능 거리는 늘어나지만, 유체 선택과 펌프동력 페널티가 함께 바뀐다고 설명한다.",
+        "- 35 km 복구는 기본안의 단순 연장이 아니라 운전점 변경의 결과라는 점을 분명히 한다.",
         "",
-        "## Slide 8. Annual Impact",
-        f"- Annual electricity saving is {_format_number(annual_map['Electricity saving']['value'])} {annual_map['Electricity saving']['unit']}.",
-        f"- Annual electricity cost saving is {_format_number(annual_map['Electricity cost saving']['value'] / 1_000_000.0)} million KRW/year.",
-        f"- Annual avoided indirect emissions are {_format_number(annual_map['Avoided indirect emissions']['value'])} {annual_map['Avoided indirect emissions']['unit']}.",
+        "## 슬라이드 8. 연간 효과",
+        f"- 연간 전력 절감량은 {_format_number(annual_map['Electricity saving']['value'])} MWh/년이다.",
+        f"- 연간 전력요금 절감은 {_format_number(annual_map['Electricity cost saving']['value'] / 1_000_000.0)} 백만원/년 수준이다.",
+        f"- 연간 회피 간접배출은 {_format_number(annual_map['Avoided indirect emissions']['value'])} tCO2/년이다.",
         "",
-        "## Slide 9. Recommendation",
-        "- Close with a decision statement: the 10 km LNG cold-energy design is technically feasible and strongly attractive on an energy basis.",
-        "- Say explicitly that 35 km requires a changed operating point and should be treated as a design extension, not the base promise.",
+        "## 슬라이드 9. 최종 제안",
+        "- 10 km LNG 냉열 설계는 기술적으로 성립하고 에너지 측면에서 매우 매력적이라는 결론으로 닫는다.",
+        "- 35 km는 설계 확장 조건이지 기본 약속이 아니라는 점을 분명히 말한다.",
     ]
     if not high_temp.empty:
         row = high_temp.iloc[0]
         script_lines.insert(
-            script_lines.index("## Slide 8. Annual Impact") - 1,
-            f"- Mention the recovery point explicitly: at {row['supply_temp_c']:.1f} C supply temperature, the design becomes feasible at 35 km with {row['selected_fluid']}.",
+            script_lines.index("## 슬라이드 8. 연간 효과") - 1,
+            f"- 복구 지점도 구체적으로 말한다. 공급온도 {row['supply_temp_c']:.1f} °C에서는 {row['selected_fluid']}로 35 km 조건이 성립한다.",
         )
     script_lines.extend(
         [
-            "- End by positioning the project as a reusable design study with traceable sources, assumptions, and scenarios.",
+            "- 마지막으로 이 프로젝트가 출처, 가정, 시나리오가 추적 가능한 재사용형 설계 연구라는 점을 강조한다.",
         ]
     )
     script_path = deliverables_dir / "presentation_script.md"

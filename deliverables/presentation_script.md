@@ -1,46 +1,46 @@
-# Presentation Script
+# 발표 스크립트
 
-## Slide 1. Title and Core Message
-- Open with the design question: can LNG cold energy replace a conventional data-center cooling duty?
-- Emphasize that the project is now a reproducible, code-based engineering study rather than a one-off spreadsheet.
-- Highlight the three anchor numbers immediately: cooling load 13,476.0 kW, baseline compressor power 4,185.4 kW, LNG pump power 13.1 kW.
+## 슬라이드 1. 제목과 핵심 메시지
+- 첫 문장은 설계 질문으로 시작한다. LNG 냉열로 기존 데이터센터 냉방부하를 대체할 수 있는가를 바로 던진다.
+- 이번 결과는 일회성 스프레드시트가 아니라 재현 가능한 코드 기반 설계 연구라는 점을 강조한다.
+- 앵커 숫자 세 개를 먼저 제시한다. 냉방부하 13,476.0 kW, 기준 압축기 동력 4,185.4 kW, LNG 루프 펌프동력 13.1 kW다.
 
-## Slide 2. Design Question and Basis
-- Frame the assignment constraints before showing any design result.
-- Use the modeled cooling load and the transport-distance requirement as the two hardest assignment constraints.
-- Call out that sources and assumptions are explicitly tracked inside the project repository.
+## 슬라이드 2. 설계 질문과 기준
+- 결과를 보여주기 전에 과제 제약조건을 먼저 정리한다.
+- 모델링된 냉방부하와 장거리 이송조건이 가장 빡빡한 제약이라는 점을 짚는다.
+- 모든 출처와 가정을 저장소 안에서 추적 가능하게 관리했다는 점을 말한다.
 
-## Slide 3. System Concept
-- Explain the architecture in one sentence: LNG cold energy chills a secondary loop, and that loop transports duty to the IDC.
-- Mention the two design bottlenecks: vaporizer pinch and long-distance transport penalty.
-- State the current base-case fluid choice: R-717 (Ammonia).
+## 슬라이드 3. 시스템 개념
+- LNG 냉열이 2차 루프를 냉각하고, 그 루프가 IDC까지 냉열을 운반하는 구조를 한 문장으로 설명한다.
+- 설계를 가르는 핵심 병목은 기화기 핀치와 장거리 이송 페널티라고 정리한다.
+- 현재 기본안의 냉각유체는 R-717 (Ammonia)라고 명시한다.
 
-## Slide 4. Benchmark Against the Reference Cycle
-- Theoretical minimum power is 1,215.8 kW.
-- Reference R-134a compressor power is 4,185.4 kW.
-- The modeled LNG loop pump demand is only 13.1 kW, which defines the main energy argument.
+## 슬라이드 4. 기준 사이클 대비 성능
+- 이론 최소동력은 1,215.8 kW다.
+- 기준 R-134a 압축기 동력은 4,185.4 kW다.
+- LNG 루프 펌프동력은 13.1 kW 수준으로 매우 낮으며, 이것이 핵심 에너지 논거라고 설명한다.
 
-## Slide 5. Coolant Selection
-- Present R-717 (Ammonia) as the base-case winner, not as an arbitrary choice but as the best trade-off in the modeled ranking.
-- Explain that the screening compares feasibility, pumping demand, heat-exchanger scale, and downstream annual benefit.
-- Position propane and isobutane as useful alternatives rather than discarded options.
+## 슬라이드 5. 냉각유체 선정
+- R-717 (Ammonia)는 임의 선택이 아니라 모델링된 순위에서 가장 좋은 균형점을 보인 기본안이라고 설명한다.
+- 스크리닝은 성립 여부, 펌프동력, 열교환기 규모, 연간 절감 효과를 함께 비교한 결과라고 말한다.
+- 프로판과 이소부탄은 탈락품이 아니라 후순위 대안으로 제시한다.
 
-## Slide 6. Transport-Distance Constraint
-- State the base result clearly: maximum feasible one-way distance is about 29.6 km.
-- Therefore the 35 km case is not feasible at the current design point.
-- Use this as a design insight, not as a failure: transport distance is the real system constraint after the base 10 km case closes.
+## 슬라이드 6. 이송거리 제약
+- 기본 결과를 명확히 말한다. 추정 최대 편도 성립거리는 약 29.6 km다.
+- 따라서 현재 설계점에서 35 km 조건은 불성립이라고 정리한다.
+- 이 결과를 실패가 아니라 설계 통찰로 제시한다. 10 km가 닫힌 뒤 진짜 제약은 이송거리라는 뜻이다.
 
-## Slide 7. Temperature Trade-off
-- Explain that a warmer supply temperature increases transport feasibility but also changes the fluid preference and pumping penalty.
-- Show that recovering 35 km is possible only by moving the operating point, not by assuming the base design magically stretches that far.
-- Mention the recovery point explicitly: at -43.1 C supply temperature, the design becomes feasible at 35 km with R-600a (Isobutane).
+## 슬라이드 7. 공급온도 상충관계
+- 공급온도를 높이면 이송 가능 거리는 늘어나지만, 유체 선택과 펌프동력 페널티가 함께 바뀐다고 설명한다.
+- 35 km 복구는 기본안의 단순 연장이 아니라 운전점 변경의 결과라는 점을 분명히 한다.
+- 복구 지점도 구체적으로 말한다. 공급온도 -43.1 °C에서는 R-600a (Isobutane)로 35 km 조건이 성립한다.
 
-## Slide 8. Annual Impact
-- Annual electricity saving is 36,549.0 MWh/year.
-- Annual electricity cost saving is 3,839.5 million KRW/year.
-- Annual avoided indirect emissions are 16,757.7 tCO2/year.
+## 슬라이드 8. 연간 효과
+- 연간 전력 절감량은 36,549.0 MWh/년이다.
+- 연간 전력요금 절감은 3,839.5 백만원/년 수준이다.
+- 연간 회피 간접배출은 16,757.7 tCO2/년이다.
 
-## Slide 9. Recommendation
-- Close with a decision statement: the 10 km LNG cold-energy design is technically feasible and strongly attractive on an energy basis.
-- Say explicitly that 35 km requires a changed operating point and should be treated as a design extension, not the base promise.
-- End by positioning the project as a reusable design study with traceable sources, assumptions, and scenarios.
+## 슬라이드 9. 최종 제안
+- 10 km LNG 냉열 설계는 기술적으로 성립하고 에너지 측면에서 매우 매력적이라는 결론으로 닫는다.
+- 35 km는 설계 확장 조건이지 기본 약속이 아니라는 점을 분명히 말한다.
+- 마지막으로 이 프로젝트가 출처, 가정, 시나리오가 추적 가능한 재사용형 설계 연구라는 점을 강조한다.
