@@ -6,6 +6,8 @@ import subprocess
 
 import pandas as pd
 
+from .config import load_config
+from .load_model import compute_load_model
 from .thermo import ensure_directory
 
 
@@ -54,9 +56,473 @@ def _markdown_table(frame: pd.DataFrame, columns: list[str]) -> str:
     return "\n".join(rows)
 
 
+def _parse_assumptions(assumptions_path: Path) -> dict[str, dict[str, str]]:
+    entries: dict[str, dict[str, str]] = {}
+    for line in assumptions_path.read_text(encoding="utf-8").splitlines():
+        if not line.startswith("| ASM-"):
+            continue
+        parts = [part.strip() for part in line.strip().split("|")[1:-1]]
+        if len(parts) < 4:
+            continue
+        entries[parts[0]] = {
+            "assumption": parts[1],
+            "value": parts[2],
+            "why": parts[3],
+        }
+    return entries
+
+
+def _math_block(*lines: str) -> list[str]:
+    return ["```math", *lines, "```", ""]
+
+
+def _source_note(source_ids: str) -> str:
+    return f"*출처 ID: {source_ids}*"
+
+
+def _config_source_id(project_config, dotted_path: str) -> str:
+    citation = project_config.citations.get(dotted_path)
+    return citation.source_id if citation else "-"
+
+
+def _format_celsius(temperature_k: float) -> str:
+    return f"{temperature_k - 273.15:.1f}"
+
+
+def _build_report_front_matter(ctx: dict[str, object]) -> list[str]:
+    return [
+        "# LNG 냉열 기반 IDC 냉각시스템 설계 연구",
+        "",
+        "> 이 문서는 GitHub Markdown 수식 렌더링을 고려해 `math` 코드 블록과 inline LaTeX 표기를 사용했다.",
+        "",
+        "## 초록",
+        "",
+        (
+            "본 연구는 2022년 열시스템디자인 과제를 재현 가능한 코드 기반 설계 연구로 다시 구성한 결과물이다. "
+            f"대상 IDC의 총 냉방부하는 **{ctx['total_load_kw']} kW**로 계산되었고, "
+            f"이론 최소동력은 **{ctx['minimum_power_kw']} kW**, "
+            f"기준 R-134a 증기압축 시스템의 압축기 동력은 **{ctx['baseline_power_kw']} kW**로 산정되었다. "
+            f"이에 비해 LNG 냉열 기반 시스템은 **{ctx['selected_coolant']}**를 2차 루프 냉각유체로 사용할 때 "
+            f"LNG 기화 duty **{ctx['lng_duty_kw']} kW**, 배관 열유입 **{ctx['pipeline_heat_gain_kw']} kW**, "
+            f"루프 펌프동력 **{ctx['pump_power_kw']} kW**의 설계가 가능했다. "
+            f"그 결과 기준 시스템 대비 전력 절감은 **{ctx['power_saving_kw']} kW**, "
+            f"연간 전력 절감은 **{ctx['annual_saving_mwh']} MWh/년**, "
+            f"연간 비용 절감은 **{ctx['annual_cost_saving_mkrw']} 백만원/년**, "
+            f"연간 회피 배출은 **{ctx['annual_avoided_tco2']} tCO2/년**으로 평가되었다. "
+            f"기본 10 km 설계는 성립하지만, 현재 운전점에서의 추정 최대 성립거리는 약 **{ctx['max_distance_km']} km**로 35 km 조건은 불성립이었다."
+        ),
+        "",
+        _source_note("SRC-001,SRC-004,SRC-005,SRC-006,SRC-007,SRC-008,SRC-010,SRC-013,SRC-014,ASM-019,ASM-020,ASM-032"),
+        "",
+        "## 1. 서론",
+        "",
+        (
+            "데이터센터는 상시 운전되는 고발열 시설이며, 냉방 시스템은 전체 전력 수요의 상당 부분을 차지한다. "
+            "따라서 데이터센터 냉각을 기계식 압축기 중심으로만 해결하는 접근은 에너지 비용과 전력 인프라 부담을 동시에 키운다. "
+            "반면 LNG 기화 과정은 극저온의 냉열을 본질적으로 포함하므로, 이를 적절히 회수하면 대규모 냉방부하를 낮은 동력으로 처리할 수 있다."
+        ),
+        "",
+        (
+            "이번 재구축의 목표는 단순히 예전 엑셀 파일을 재현하는 것이 아니라, 설계 가정과 출처, 계산식, 민감도 분석, "
+            "산출물을 하나의 저장소 안에서 다시 생성할 수 있는 구조로 바꾸는 것이었다. 즉, 결과값만 맞추는 프로젝트가 아니라 "
+            "왜 그 결과가 나오는지까지 추적 가능한 프로젝트로 재정의했다."
+        ),
+        "",
+        "이 보고서가 답하려는 핵심 질문은 다음과 같다.",
+        "",
+        "1. 대상 IDC의 총 냉방부하는 얼마인가?",
+        "2. 해당 부하에 대한 이론 최소동력과 기존 증기압축 기준선은 어느 수준인가?",
+        "3. LNG와 IDC를 연결하는 2차 루프에는 어떤 냉각유체가 가장 적합한가?",
+        "4. LNG 기화기와 장거리 배관을 동시에 만족하는 설계점은 존재하는가?",
+        "5. 10 km 기본 설계와 35 km 확장 조건은 어떤 차이를 보이는가?",
+        "6. 연간 에너지, 비용, 탄소 효과는 어느 정도인가?",
+        "",
+        _source_note("SRC-001,SRC-009,SRC-011"),
+        "",
+        "## 2. 문제 정의와 입력 조건",
+        "",
+        (
+            "과제에서 제시된 기본 경계조건은 랙 수, 랙당 발열, 실내 공기 조건, 냉수 조건, LNG 압력과 온도, "
+            "기화기 최소 접근온도, 기본 이송거리와 확장 이송거리로 구성된다. 이 조건들은 [base.toml](../config/base.toml)에 "
+            "정리되어 있으며, 각 항목에는 원문 출처 또는 가정 ID가 함께 연결되어 있다."
+        ),
+        "",
+        str(ctx["input_conditions_md"]),
+        "",
+        (
+            "또한 과제 원문에 직접 주어지지 않는 층고, 틈새바람, 외피 열관류율, 배관 roughness, "
+            "단열 두께 스캔 범위 등은 별도의 공학 가정으로 관리했다. 이 가정들은 결과를 임의로 조정하기 위한 숫자가 아니라, "
+            "설계 자동화를 위해 반드시 필요한 기본값들이다."
+        ),
+        "",
+        _source_note("SRC-001,ASM-001,ASM-007,ASM-014,ASM-015,ASM-019,ASM-020,ASM-024,ASM-025,ASM-027,ASM-028"),
+        "",
+        "## 3. 수학적 모델",
+        "",
+        (
+            "본 연구의 계산 체계는 부하 모델, 이론 최소동력, 기준 냉동사이클, 냉각유체 스크리닝, "
+            "LNG 기화기 상세설계, 장거리 배관 설계, 연간 효과 평가의 7개 모듈로 구성된다. "
+            "각 모듈은 하나의 독립 계산기라기보다, 앞 단계의 결과를 다음 단계의 입력으로 넘기는 연속 설계 파이프라인이다."
+        ),
+        "",
+    ]
+
+
+def _build_report_model_sections(ctx: dict[str, object]) -> list[str]:
+    lines = [
+        "### 3.1 냉방부하 모델",
+        "",
+        (
+            "냉방부하 모델은 IT 랙 발열뿐 아니라 전력 분배 손실, 조명, 부대설비, 인체 발열, 외피 전도, 일사, "
+            "틈새바람에 의한 외기 유입을 모두 더해 총 냉방부하를 산정한다. 현재 구현은 `load_model.py`에 있으며, "
+            "부하를 하나의 lumped load가 아니라 항목별 합산으로 계산한다."
+        ),
+        "",
+    ]
+    lines.extend(
+        _math_block(
+            r"\dot Q_{\mathrm{total}} = \dot Q_{\mathrm{IT}} + \dot Q_{\mathrm{dist}} + \dot Q_{\mathrm{light}} + \dot Q_{\mathrm{aux}} + \dot Q_{\mathrm{occ}} + \dot Q_{\mathrm{wall}} + \dot Q_{\mathrm{roof}} + \dot Q_{\mathrm{glz}} + \dot Q_{\mathrm{sol}} + \dot Q_{\mathrm{inf}}",
+            r"\dot Q_{\mathrm{wall}} = U_{\mathrm{wall}} A_{\mathrm{wall}} (T_{\mathrm{amb}} - T_{\mathrm{room}})",
+            r"\dot Q_{\mathrm{roof}} = U_{\mathrm{roof}} A_{\mathrm{roof}} (T_{\mathrm{amb}} - T_{\mathrm{room}})",
+            r"\dot Q_{\mathrm{glz}} = U_{\mathrm{glz}} A_{\mathrm{glz}} (T_{\mathrm{amb}} - T_{\mathrm{room}})",
+            r"\dot Q_{\mathrm{sol}} = I_{\mathrm{eff}} \cdot SHGC \cdot A_{\mathrm{glz}}",
+            r"\dot Q_{\mathrm{inf}} = \dot V_{\mathrm{inf}} \rho_{\mathrm{amb}} (h_{\mathrm{amb}} - h_{\mathrm{room}})",
+        )
+    )
+    lines.extend(
+        [
+            "특히 틈새바람 부하는 외기와 실내의 습공기 엔탈피 차를 사용해 평가했다.",
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"w = 0.62198 \frac{p_w}{p - p_w}",
+            r"h = 1000 \left(1.006 T_{^\circ\mathrm{C}} + w \left(2501 + 1.86 T_{^\circ\mathrm{C}}\right)\right)",
+        )
+    )
+    lines.extend(
+        [
+            str(ctx["load_table_md"]),
+            "",
+            (
+                f"계산 결과 총 냉방부하는 **{ctx['total_load_kw']} kW**였고, 그중 IT 랙과 전력 분배 손실이 가장 큰 비중을 차지했다. "
+                "이는 데이터센터 부하의 본질이 전산장비 발열이라는 점과 일치한다."
+            ),
+            "",
+            _source_note(str(ctx["load_source_ids"])),
+            "",
+            "### 3.2 이론 최소동력",
+            "",
+            (
+                "이론 최소동력은 냉수 평균온도를 저온 열원, 외기온도를 고온 열원으로 두는 이상 카르노 냉동기의 최소 일 입력으로 계산했다. "
+                "이는 실제 장치가 달성할 수 없는 절대 하한선이다."
+            ),
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"T_L = \frac{T_{\mathrm{cw,s}} + T_{\mathrm{cw,r}}}{2}",
+            r"T_H = T_{\mathrm{amb}}",
+            r"\dot W_{\min} = \dot Q_L \frac{T_H - T_L}{T_L}",
+        )
+    )
+    lines.extend(
+        [
+            (
+                f"냉수 평균온도는 **{ctx['chilled_mean_c']} °C**, 외기온도는 **{ctx['ambient_c']} °C**로 두었고, "
+                f"계산된 이론 최소동력은 **{ctx['minimum_power_kw']} kW**였다."
+            ),
+            "",
+            _source_note(str(ctx["minimum_power_source_ids"])),
+            "",
+            "### 3.3 기준 R-134a 증기압축 사이클",
+            "",
+            (
+                "기준 시스템은 단순 R-134a 증기압축 사이클로 모델링했다. 증발기와 응축기 접근온도는 각각 10 K, "
+                "압축기 등엔트로피 효율은 75%로 두었다."
+            ),
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"h_2 = h_1 + \frac{h_{2s} - h_1}{\eta_{\mathrm{is}}}",
+            r"\dot m_{\mathrm{ref}} = \frac{\dot Q_L}{h_1 - h_4}",
+            r"\dot W_{\mathrm{comp}} = \dot m_{\mathrm{ref}} (h_2 - h_1)",
+            r"COP = \frac{\dot Q_L}{\dot W_{\mathrm{comp}}}",
+        )
+    )
+    lines.extend(
+        [
+            (
+                f"이 기준선에서 압축기 동력은 **{ctx['baseline_power_kw']} kW**로 계산되었고, 이는 기존 엑셀 결과 "
+                f"**{ctx['legacy_baseline_kw']} kW**와 같은 규모를 보였다."
+            ),
+            "",
+            "![기준 R-134a 사이클 P-h 선도](../output/figures/baseline_cycle_ph.png)",
+            "",
+            _source_note(str(ctx["baseline_source_ids"])),
+            "",
+            "### 3.4 냉각유체 스크리닝",
+            "",
+            (
+                "2차 루프 냉각유체 후보는 R-170, R-717, R-744, R-1270, R-290, R-600a, R-1150으로 두었다. "
+                "후보는 1 MPa 루프 압력에서 단상 액체 여부, 삼중점 여유, 요구 질량유량과 점도, 안전성 패널티를 기준으로 정렬했다."
+            ),
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"\dot Q_{\mathrm{LNG}} = \frac{\dot Q_{\mathrm{IDC}}}{f_{\mathrm{util}}}",
+            r"\dot m_{\mathrm{loop}} = \frac{\dot Q_{\mathrm{LNG}}}{c_p \left(T_{\mathrm{after\ IDC}} - T_{\mathrm{supply}}\right)}",
+            r"\dot V_{\mathrm{loop}} = \frac{\dot m_{\mathrm{loop}}}{\rho}",
+            r"I_{\mathrm{transport}} = \dot m_{\mathrm{loop}} \frac{\mu}{\rho}",
+            r"S = 1 - 0.45 m_{\mathrm{norm}} - 0.30 \dot V_{\mathrm{norm}} - 0.15 I_{\mathrm{norm}} - P_{\mathrm{safety}} - P_{\mathrm{compat}} - 0.05 \min\left(\frac{GWP}{1000}, 1\right)",
+        )
+    )
+    lines.extend(
+        [
+            "마지막 점수식은 열역학 성능과 실무 리스크를 함께 반영하기 위한 휴리스틱이며, 후보군 상대 비교 도구로 사용했다.",
+            "",
+            str(ctx["alternatives_md"]),
+            "",
+            (
+                f"기본 설계점에서 최상위 유체는 **{ctx['selected_coolant']}**였고, 요구 질량유량은 "
+                f"**{ctx['selected_mass_flow']} kg/s**였다."
+            ),
+            "",
+            "![냉각유체 후보 비교](../output/figures/fluid_ranking.png)",
+            "",
+            _source_note("SRC-003,SRC-008,ASM-017,ASM-018,ASM-019"),
+            "",
+            "### 3.5 LNG 기화기 상세설계",
+            "",
+            (
+                "기화기 모델의 핵심은 7 MPa 메탄의 비열이 극저온 영역에서 크게 변하므로, 단일 평균 비열 기반 LMTD 계산만으로는 "
+                "정확한 설계를 보장하기 어렵다는 점이다. 따라서 본 코드는 112-190-205-220-283 K의 네 구간으로 나누어 엔탈피 기반 열량을 추적했다."
+            ),
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"\dot m_{\mathrm{LNG}} = \frac{\dot Q_{\mathrm{total}}}{h_{\mathrm{NG,out}} - h_{\mathrm{LNG,in}}}",
+            r"\dot q_i = \dot m_{\mathrm{LNG}} (h_{i+1} - h_i)",
+            r"Nu_t = 0.023 Re_t^{0.8} Pr_t^{0.4}",
+            r"j_h = 0.5 \left(1 + \frac{B}{D_s}\right)\left(0.08 Re_s^{0.6821} + 0.7 Re_s^{0.1772}\right)",
+            r"h_o = j_h \frac{k_s Pr_s^{1/3}}{D_e}",
+            r"U_o^{-1} = \frac{d_o}{d_i h_i} + \frac{d_o \ln(d_o / d_i)}{2 k_w} + \frac{1}{h_o}",
+            r"A_{\mathrm{req}} = \sum_i \frac{\dot q_i}{U_{o,i}\Delta T_{\mathrm{lm},i}}",
+        )
+    )
+    lines.extend(
+        [
+            "기하 형상은 관 길이 6-16 m, 관 수 200-2200개 범위에서 자동 탐색했고, 제공 면적, 유속 제한, 핀치 조건을 동시에 검사했다.",
+            "",
+            str(ctx["hx_segments_md"]),
+            "",
+            (
+                f"최종 형상은 **관 수 {ctx['hx_tube_count']}개**, **관 길이 {ctx['hx_tube_length_m']} m**, "
+                f"**쉘 직경 {ctx['hx_shell_diameter_m']} m**로 정리되었고, 최소 핀치는 **{ctx['hx_min_pinch_k']} K**였다."
+            ),
+            "",
+            "![LNG 기화기 온도 프로파일](../output/figures/hx_temperature_profile.png)",
+            "",
+            _source_note("SRC-001,SRC-004,SRC-005,SRC-006,SRC-007,ASM-020,ASM-021,ASM-022,ASM-023"),
+            "",
+            "### 3.6 장거리 배관 모델",
+            "",
+            (
+                "배관 모델은 공급관과 환수관의 압력강하와 열유입을 각각 계산하고, 이를 합쳐 전체 펌프동력과 IDC 도달 냉량을 평가한다. "
+                "설계 변수는 공급관 내경, 환수관 내경, 단열 두께다."
+            ),
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"Re = \frac{\rho v D}{\mu}",
+            r"\Delta P = f \frac{L}{D}\frac{\rho v^2}{2} + K \frac{\rho v^2}{2}",
+            r"\dot q' = \frac{T_{\mathrm{amb}} - T_f}{\ln(r_2 / r_1)/(2 \pi k_{\mathrm{ins}}) + 1/(2 \pi r_2 h_o)}",
+            r"\dot Q_{\mathrm{pipe}} = (\dot q'_{\mathrm{supply}} + \dot q'_{\mathrm{return}}) L",
+            r"\dot W_{\mathrm{pump}} = \frac{\Delta P_{\mathrm{supply}}\dot V_{\mathrm{supply}} + \Delta P_{\mathrm{return}}\dot V_{\mathrm{return}}}{\eta_{\mathrm{pump}}}",
+        )
+    )
+    lines.extend(
+        [
+            "배관 스캔의 목적함수는 `열유입 목표와의 차이 + 펌프동력 가중합` 형태의 휴리스틱으로 두었다.",
+            "",
+            str(ctx["pipeline_design_md"]),
+            "",
+            "![배관 직경 트레이드오프](../output/figures/pipeline_tradeoff.png)",
+            "",
+            _source_note("SRC-001,ASM-014,ASM-015,ASM-016,ASM-024,ASM-025,ASM-026"),
+            "",
+            "### 3.7 연간 에너지, 비용, 탄소 모델",
+            "",
+            (
+                "연간화는 데이터센터의 상시 운전을 반영해 8,760시간/년 기준으로 수행했다. "
+                "전력요금과 전력 배출계수는 공식 자료를 기준으로 입력했으며, v1에서는 기준 압축기 동력과 LNG 루프 펌프동력만을 비교 경계로 삼았다."
+            ),
+            "",
+        ]
+    )
+    lines.extend(
+        _math_block(
+            r"E_{\mathrm{year}} = P \cdot t_{\mathrm{op}} / 1000",
+            r"C_{\mathrm{year}} = P \cdot t_{\mathrm{op}} \cdot c_e",
+            r"M_{\mathrm{CO_2}} = E_{\mathrm{year}} \cdot EF_{\mathrm{grid}}",
+            r"CAPEX_{\mathrm{allow}} = \Delta C_{\mathrm{year}} \cdot N_{\mathrm{payback}}",
+        )
+    )
+    lines.extend(
+        [
+            _source_note("SRC-013,SRC-014,ASM-030,ASM-031,ASM-032"),
+            "",
+        ]
+    )
+    return lines
+
+
+def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
+    return [
+        "## 4. 결과",
+        "",
+        "### 4.1 전체 성능 요약",
+        "",
+        str(ctx["performance_summary_md"]),
+        "",
+        (
+            f"가장 먼저 눈에 띄는 결과는 **{ctx['equivalent_cop']}**에 달하는 등가 냉각 COP다. "
+            "이 값은 동일 냉방부하를 처리하기 위해 요구되는 전력의 크기가 얼마나 줄었는지를 보여준다."
+        ),
+        "",
+        "![시스템 소비동력 비교](../output/figures/system_power_comparison.png)",
+        "",
+        "### 4.2 냉각유체 선정 결과",
+        "",
+        (
+            f"후보군 비교 결과, 기본안은 **{ctx['selected_coolant']}**로 결정되었다. "
+            "이는 루프 질량유량, 장거리 배관 동력, 기화기 형상, 환경성, 안전성 패널티를 동시에 고려한 결과다."
+        ),
+        "",
+        str(ctx["alternatives_md"]),
+        "",
+        "### 4.3 LNG 기화기 결과",
+        "",
+        (
+            f"LNG 기화기 설계는 네 구간 모두에서 양의 핀치를 유지했고, 최소값은 **{ctx['hx_min_pinch_k']} K**였다. "
+            f"최종적으로 LNG는 **{ctx['lng_inlet_k']} K**에서 **{ctx['ng_outlet_k']} K**까지 가열된다."
+        ),
+        "",
+        str(ctx["hx_segments_md"]),
+        "",
+        "### 4.4 배관 설계와 거리 민감도",
+        "",
+        (
+            f"배관 기본안은 공급관과 환수관 모두 **{ctx['pipeline_id_m']} m** 내경을 사용하고, "
+            f"단열 두께는 **{ctx['pipeline_insulation_m']} m**로 결정되었다."
+        ),
+        "",
+        str(ctx["distance_md"]),
+        "",
+        "![거리 민감도](../output/figures/pipeline_distance_sensitivity.png)",
+        "",
+        (
+            f"거리 증가에 따라 열유입이 거의 선형적으로 증가하면서, 현재 운전점에서의 추정 최대 편도 성립거리는 **{ctx['max_distance_km']} km**로 나타났다. "
+            f"따라서 **{ctx['long_distance_km']} km** 조건은 기본안의 단순 확장만으로는 **{ctx['long_distance_status']}**이다."
+        ),
+        "",
+        "### 4.5 공급온도 민감도와 35 km 복구 가능성",
+        "",
+        str(ctx["temperature_md"]),
+        "",
+        "![공급온도 민감도](../output/figures/supply_temperature_sensitivity.png)",
+        "",
+        (
+            f"공급온도 스윕 결과, 펌프동력 최소점은 **{ctx['best_supply_temp_c']} °C**이며 이때도 "
+            f"기본 유체는 **{ctx['best_supply_fluid']}**로 유지된다. {ctx['recover_35km_text']}"
+        ),
+        "",
+        "### 4.6 연간 효과와 경제성",
+        "",
+        str(ctx["annual_md"]),
+        "",
+        "![연간 효과](../output/figures/annual_impact_comparison.png)",
+        "",
+        str(ctx["payback_md"]),
+        "",
+        (
+            f"현재 비교 경계에서 LNG 시스템은 연간 **{ctx['annual_saving_mwh']} MWh/년**의 전력을 줄이고, "
+            f"연간 **{ctx['annual_cost_saving_mkrw']} 백만원/년**의 전기요금을 절감하며, "
+            f"연간 **{ctx['annual_avoided_tco2']} tCO2/년**의 간접배출을 회피한다."
+        ),
+        "",
+        "### 4.7 기존 엑셀 결과와 비교",
+        "",
+        str(ctx["legacy_md"]),
+        "",
+        "## 5. 논의",
+        "",
+        (
+            "첫째, 10 km 기본 설계는 기술적으로 성립할 뿐 아니라 에너지 절감 측면에서도 매우 유리하다. "
+            "기준 압축기 시스템이 수 MW급 전력을 요구하는 반면, LNG 냉열 기반 루프는 수십 kW 수준의 펌프동력으로 동일한 냉방부하를 처리할 수 있었다."
+        ),
+        "",
+        (
+            "둘째, 이번 프로젝트의 진짜 설계 통찰은 '35 km가 안 된다'는 사실 자체다. "
+            f"이번 결과는 현재 기본안의 경계가 약 **{ctx['max_distance_km']} km**라는 점을 정량적으로 보여준다."
+        ),
+        "",
+        (
+            "셋째, 35 km는 절대 불가능한 조건이 아니라 기본안의 단순 연장으로는 불가능한 조건이다. "
+            "즉, 운전점과 유체 선택을 바꾸면 회복 가능할 수도 있지만, 그 대가로 펌프동력과 설계 복잡성이 증가한다."
+        ),
+        "",
+        (
+            "넷째, 등가 COP와 연간 절감량은 매우 크지만, 현 단계의 경제성 경계는 압축기 동력 대 펌프동력 비교에 한정되어 있다."
+        ),
+        "",
+        "## 6. 한계와 향후 확장",
+        "",
+        "- LNG는 v1에서 순수 메탄으로 가정했다.",
+        "- IDC 측 분배 네트워크는 전체 유압망이 아니라 냉방 duty 경계조건으로 단순화했다.",
+        "- 기화기 설계는 열역학과 형상 스캔 중심이며, 응력과 제작성의 상세 검토는 아직 별도 단계가 필요하다.",
+        "- 경제성은 핵심 동력 비교 범위에 한정되므로 전체 CAPEX/OPEX 분석으로 확장되어야 한다.",
+        "- 냉각유체 스코어는 휴리스틱 성격이 있으므로, 안전/규제/재료 호환성 검토로 후속 보정이 필요하다.",
+        "",
+        "## 7. 결론",
+        "",
+        (
+            f"본 연구는 총 **{ctx['total_load_kw']} kW**의 IDC 냉방부하를 대상으로, LNG 냉열 기반 냉각 시스템이 "
+            f"10 km 기본 설계점에서 충분히 성립함을 보였다. 선정된 기본안은 **{ctx['selected_coolant']}**를 2차 루프 유체로 사용하고, "
+            f"기화기 duty **{ctx['lng_duty_kw']} kW**, 루프 펌프동력 **{ctx['pump_power_kw']} kW**, "
+            f"배관 열유입 **{ctx['pipeline_heat_gain_kw']} kW**의 수준에서 IDC 부하를 충족한다. "
+            f"반면 35 km 조건은 기본안에서 불성립이며, 현재 경계는 약 **{ctx['max_distance_km']} km**다."
+        ),
+        "",
+        "## 부록 A. 출처 레지스트리",
+        "",
+        str(ctx["source_registry_md"]),
+        "",
+        "## 부록 B. 공학 가정 레지스트리",
+        "",
+        str(ctx["assumption_registry_md"]),
+        "",
+        "## 참고문헌",
+        "",
+    ]
+
+
 def build_report(project_root: Path) -> Path:
     output_dir = project_root / "output"
     deliverables_dir = ensure_directory(project_root / "deliverables")
+    project_config = load_config(project_root / "config" / "base.toml")
+    config = project_config.values
+    load_result = compute_load_model(config)
     summary = _summary_map(output_dir)
     alternatives = pd.read_csv(output_dir / "alternative_designs.csv")
     distance = pd.read_csv(output_dir / "distance_scenarios.csv")
@@ -64,11 +530,19 @@ def build_report(project_root: Path) -> Path:
     annual = pd.read_csv(output_dir / "annual_summary.csv")
     payback = pd.read_csv(output_dir / "payback_allowable_capex.csv")
     legacy = pd.read_csv(output_dir / "legacy_comparison.csv")
+    hx_segments = pd.read_csv(output_dir / "hx_segments.csv")
+    pipeline_scan = pd.read_csv(output_dir / "pipeline_scan_top200.csv")
     sources = _parse_sources(project_root / "docs" / "sources.md")
+    assumptions = _parse_assumptions(project_root / "docs" / "assumptions.md")
 
     selected_alternative = alternatives.iloc[0]
+    selected_pipeline = pipeline_scan.iloc[0]
     long_distance = distance.sort_values("distance_km").iloc[-1]
     best_temp = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw").iloc[0]
+    recover_35km = temperature[
+        (temperature["status"] == "feasible") & (temperature["long_distance_meets_load"] == True)
+    ].sort_values("pump_power_kw")
+
     annual_report = annual.copy()
     annual_report["항목"] = annual_report["metric"].replace(
         {
@@ -141,162 +615,218 @@ def build_report(project_root: Path) -> Path:
             "차이율 (%)": legacy["difference_percent"].map(lambda x: _format_number(x, 2)),
         }
     )
+    load_table = pd.DataFrame(
+        [
+            {
+                "부하 항목": name,
+                "열부하 (kW)": _format_number(value),
+                "비중 (%)": _format_number(100.0 * value / load_result.total_kw, 2),
+            }
+            for name, value in load_result.breakdown_kw.items()
+        ]
+    )
+    input_conditions_table = pd.DataFrame(
+        [
+            {
+                "항목": "랙 수",
+                "값": f"{config['assignment']['rack_count']:.0f} racks",
+                "출처 ID": _config_source_id(project_config, "assignment.rack_count"),
+            },
+            {
+                "항목": "랙당 IT 발열",
+                "값": f"{config['assignment']['it_load_kw_per_rack']:.1f} kW/rack",
+                "출처 ID": _config_source_id(project_config, "assignment.it_load_kw_per_rack"),
+            },
+            {
+                "항목": "실내 공기 조건",
+                "값": f"{_format_celsius(config['assignment']['room_air_temp_k'])} °C, RH {config['assignment']['room_relative_humidity'] * 100:.0f}%",
+                "출처 ID": _config_source_id(project_config, "assignment.room_air_temp_k"),
+            },
+            {
+                "항목": "냉수 공급/환수",
+                "값": f"{_format_celsius(config['assignment']['chilled_water_supply_temp_k'])} / {_format_celsius(config['assignment']['chilled_water_return_temp_k'])} °C",
+                "출처 ID": _config_source_id(project_config, "assignment.chilled_water_supply_temp_k"),
+            },
+            {
+                "항목": "외기 조건",
+                "값": f"{_format_celsius(config['assignment']['ambient_air_temp_k'])} °C, RH {config['assignment']['ambient_relative_humidity'] * 100:.0f}%",
+                "출처 ID": _config_source_id(project_config, "assignment.ambient_air_temp_k"),
+            },
+            {
+                "항목": "LNG 압력/입구온도",
+                "값": f"{config['assignment']['lng_pressure_mpa']:.1f} MPa, {config['assignment']['lng_inlet_temp_k']:.1f} K",
+                "출처 ID": _config_source_id(project_config, "assignment.lng_pressure_mpa"),
+            },
+            {
+                "항목": "NG 목표 출구온도",
+                "값": f"{config['assignment']['ng_outlet_temp_k']:.1f} K",
+                "출처 ID": _config_source_id(project_config, "assignment.ng_outlet_temp_k"),
+            },
+            {
+                "항목": "최소 접근온도",
+                "값": f"{config['assignment']['minimum_temperature_approach_k']:.1f} K",
+                "출처 ID": _config_source_id(project_config, "assignment.minimum_temperature_approach_k"),
+            },
+            {
+                "항목": "기본 이송거리",
+                "값": f"{config['assignment']['pipeline_distance_m'] / 1000.0:.1f} km",
+                "출처 ID": _config_source_id(project_config, "assignment.pipeline_distance_m"),
+            },
+            {
+                "항목": "도전 이송거리",
+                "값": f"{config['system_targets']['long_distance_pipeline_m'] / 1000.0:.1f} km",
+                "출처 ID": _config_source_id(project_config, "system_targets.long_distance_pipeline_m"),
+            },
+        ]
+    )
+
+    load_table_md = _markdown_table(load_table, ["부하 항목", "열부하 (kW)", "비중 (%)"])
+    input_conditions_md = _markdown_table(input_conditions_table, ["항목", "값", "출처 ID"])
+    alternatives_md = _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "펌프동력 (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"])
+    distance_md = _markdown_table(distance_table, ["거리 (km)", "펌프동력 (kW)", "열유입 (kW)", "열여유 (kW)", "IDC 부하 충족"])
+    temperature_md = _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "펌프동력 (kW)", "최대 성립거리 (km)", "35 km 충족", "상태"])
+    annual_md = _markdown_table(annual_report, ["항목", "값", "단위"])
+    payback_md = _markdown_table(
+        payback.assign(
+            **{
+                "회수기간 (년)": payback["payback_years"],
+                "허용 추가 투자비 (백만원)": payback["allowable_incremental_capex_krw"].map(
+                    lambda x: _format_number(x / 1_000_000.0)
+                ),
+            }
+        ),
+        ["회수기간 (년)", "허용 추가 투자비 (백만원)"],
+    )
+    legacy_md = _markdown_table(legacy_table, ["항목", "기존 엑셀 (kW)", "현재 코드 (kW)", "차이 (kW)", "차이율 (%)"])
+    hx_segments_md = _markdown_table(
+        pd.DataFrame(
+            {
+                "구간": hx_segments["segment"],
+                "구간 열부하 (kW)": hx_segments["q_kw"].map(_format_number),
+                "LNG 입구 (K)": hx_segments["lng_in_k"].map(_format_number),
+                "LNG 출구 (K)": hx_segments["lng_out_k"].map(_format_number),
+                "냉각유체 입구 (K)": hx_segments["coolant_in_k"].map(_format_number),
+                "냉각유체 출구 (K)": hx_segments["coolant_out_k"].map(_format_number),
+            }
+        ),
+        ["구간", "구간 열부하 (kW)", "LNG 입구 (K)", "LNG 출구 (K)", "냉각유체 입구 (K)", "냉각유체 출구 (K)"],
+    )
+    pipeline_design_md = _markdown_table(
+        pd.DataFrame(
+            [
+                {"설계 변수": "공급관 내경", "값": f"{selected_alternative['pipeline_supply_id_m']:.3f} m"},
+                {"설계 변수": "환수관 내경", "값": f"{selected_alternative['pipeline_return_id_m']:.3f} m"},
+                {"설계 변수": "단열 두께", "값": f"{selected_alternative['pipeline_insulation_thickness_m']:.3f} m"},
+                {"설계 변수": "배관 열유입", "값": f"{_format_number(selected_alternative['pipeline_heat_gain_kw'])} kW"},
+                {"설계 변수": "루프 펌프동력", "값": f"{_format_number(selected_alternative['pump_power_kw'])} kW"},
+                {"설계 변수": "공급관 속도", "값": f"{_format_number(selected_pipeline['velocity_supply_m_per_s'], 3)} m/s"},
+                {"설계 변수": "환수관 속도", "값": f"{_format_number(selected_pipeline['velocity_return_m_per_s'], 3)} m/s"},
+                {"설계 변수": "공급관 압력강하", "값": f"{_format_number(selected_pipeline['dp_supply_kpa'])} kPa"},
+                {"설계 변수": "환수관 압력강하", "값": f"{_format_number(selected_pipeline['dp_return_kpa'])} kPa"},
+            ]
+        ),
+        ["설계 변수", "값"],
+    )
+    performance_summary_md = _markdown_table(
+        pd.DataFrame(
+            [
+                {"항목": "총 냉방부하", "값": f"{_format_number(float(summary['IDC total cooling load']['value']))} kW"},
+                {"항목": "이론 최소동력", "값": f"{_format_number(float(summary['Theoretical minimum power']['value']))} kW"},
+                {"항목": "기준 압축기 동력", "값": f"{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW"},
+                {"항목": "선정 냉각유체", "값": str(summary["Selected coolant"]["value"])},
+                {"항목": "LNG 기화 duty", "값": f"{_format_number(float(summary['LNG vaporizer duty']['value']))} kW"},
+                {"항목": "배관 열유입", "값": f"{_format_number(float(summary['Pipeline heat gain']['value']))} kW"},
+                {"항목": "IDC 도달 가능 냉량", "값": f"{_format_number(float(summary['Available cooling at IDC']['value']))} kW"},
+                {"항목": "루프 펌프동력", "값": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
+                {"항목": "등가 냉각 COP", "값": _format_number(float(summary['Equivalent cooling COP']['value']), 1)},
+                {"항목": "기준 대비 절감 동력", "값": f"{_format_number(float(summary['Baseline-to-LNG power saving']['value']))} kW"},
+            ]
+        ),
+        ["항목", "값"],
+    )
+    source_registry_md = _markdown_table(
+        pd.DataFrame(
+            [
+                {"ID": source_id, "제목": entry["title"], "형식": entry["type"], "주요 사용값": entry["used_values"]}
+                for source_id, entry in sorted(sources.items())
+            ]
+        ),
+        ["ID", "제목", "형식", "주요 사용값"],
+    )
+    assumption_registry_md = _markdown_table(
+        pd.DataFrame(
+            [
+                {"ID": assumption_id, "가정": entry["assumption"], "값": entry["value"], "설정 이유": entry["why"]}
+                for assumption_id, entry in sorted(assumptions.items())
+            ]
+        ),
+        ["ID", "가정", "값", "설정 이유"],
+    )
+
+    if not recover_35km.empty:
+        recover_row = recover_35km.iloc[0]
+        recover_35km_text = (
+            f"추가로, 공급온도를 **{recover_row['supply_temp_c']:.1f} °C**까지 높이면 "
+            f"**{recover_row['selected_fluid']}**를 사용해 35 km 조건을 회복할 수 있었으나, "
+            f"그때의 펌프동력은 **{_format_number(recover_row['pump_power_kw'])} kW**로 크게 상승했다."
+        )
+    else:
+        recover_35km_text = "공급온도 스윕 범위 안에서는 35 km 조건을 만족하는 운전점이 발견되지 않았다."
+
+    ctx: dict[str, object] = {
+        "input_conditions_md": input_conditions_md,
+        "load_table_md": load_table_md,
+        "alternatives_md": alternatives_md,
+        "distance_md": distance_md,
+        "temperature_md": temperature_md,
+        "annual_md": annual_md,
+        "payback_md": payback_md,
+        "legacy_md": legacy_md,
+        "hx_segments_md": hx_segments_md,
+        "pipeline_design_md": pipeline_design_md,
+        "performance_summary_md": performance_summary_md,
+        "source_registry_md": source_registry_md,
+        "assumption_registry_md": assumption_registry_md,
+        "total_load_kw": _format_number(float(summary["IDC total cooling load"]["value"])),
+        "minimum_power_kw": _format_number(float(summary["Theoretical minimum power"]["value"])),
+        "baseline_power_kw": _format_number(float(summary["Baseline R-134a compressor power"]["value"])),
+        "selected_coolant": str(summary["Selected coolant"]["value"]),
+        "lng_duty_kw": _format_number(float(summary["LNG vaporizer duty"]["value"])),
+        "pipeline_heat_gain_kw": _format_number(float(summary["Pipeline heat gain"]["value"])),
+        "pump_power_kw": _format_number(float(summary["LNG system pump power"]["value"])),
+        "power_saving_kw": _format_number(float(summary["Baseline-to-LNG power saving"]["value"])),
+        "annual_saving_mwh": _format_number(float(summary["Annual electricity saving"]["value"])),
+        "annual_cost_saving_mkrw": _format_number(float(summary["Annual electricity cost saving"]["value"]) / 1_000_000.0),
+        "annual_avoided_tco2": _format_number(float(summary["Annual avoided indirect emissions"]["value"])),
+        "equivalent_cop": _format_number(float(summary["Equivalent cooling COP"]["value"]), 1),
+        "max_distance_km": _format_number(distance["max_feasible_distance_m"].iloc[0] / 1000.0),
+        "chilled_mean_c": _format_celsius(0.5 * (config["assignment"]["chilled_water_supply_temp_k"] + config["assignment"]["chilled_water_return_temp_k"])),
+        "ambient_c": _format_celsius(config["assignment"]["ambient_air_temp_k"]),
+        "load_source_ids": summary["IDC total cooling load"]["source_ids"],
+        "minimum_power_source_ids": summary["Theoretical minimum power"]["source_ids"],
+        "baseline_source_ids": summary["Baseline R-134a compressor power"]["source_ids"],
+        "legacy_baseline_kw": legacy_table.iloc[1]["기존 엑셀 (kW)"],
+        "selected_mass_flow": _format_number(selected_alternative["required_mass_flow_kg_s"]),
+        "hx_tube_count": int(selected_alternative["hx_tube_count"]),
+        "hx_tube_length_m": _format_number(selected_alternative["hx_tube_length_m"]),
+        "hx_shell_diameter_m": _format_number(selected_alternative["hx_shell_diameter_m"], 3),
+        "hx_min_pinch_k": _format_number(selected_alternative["hx_min_pinch_k"]),
+        "pipeline_id_m": f"{selected_alternative['pipeline_supply_id_m']:.3f}",
+        "pipeline_insulation_m": f"{selected_alternative['pipeline_insulation_thickness_m']:.3f}",
+        "lng_inlet_k": f"{config['assignment']['lng_inlet_temp_k']:.1f}",
+        "ng_outlet_k": f"{config['assignment']['ng_outlet_temp_k']:.1f}",
+        "long_distance_km": int(long_distance["distance_km"]),
+        "long_distance_status": "성립" if bool(long_distance["meets_idc_load"]) else "불성립",
+        "best_supply_temp_c": _format_number(best_temp["supply_temp_c"]),
+        "best_supply_fluid": best_temp["selected_fluid"],
+        "recover_35km_text": recover_35km_text,
+    }
 
     report_path = deliverables_dir / "report_draft.md"
-    report_lines = [
-        "# LNG 냉열 기반 IDC 냉각시스템 설계 연구",
-        "",
-        "## 초록",
-        "",
-        (
-            "본 보고서는 2022년 열시스템디자인 과제를 재현 가능한 Python 기반 설계 연구로 다시 구성한 결과다. "
-            "LNG 냉열을 활용한 최종 설계는 "
-            f"**{_format_number(float(summary['IDC total cooling load']['value']))} kW**의 IDC 냉방부하를 만족하면서, "
-            f"기준 R-134a 압축기 동력 **{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW**를 "
-            f"LNG 루프 펌프동력 **{_format_number(float(summary['LNG system pump power']['value']))} kW** 수준으로 대체한다. "
-            f"선정된 냉각유체는 **{summary['Selected coolant']['value']}**이며, LNG 기화기 최소 핀치는 **10.0 K**로 유지했고, "
-            f"예상 연간 전력 절감량은 **{_format_number(float(summary['Annual electricity saving']['value']))} MWh/년**이다."
-        ),
-        "",
-        "## 1. 문제 정의",
-        "",
-        "본 프로젝트의 목적은 LNG 냉열을 이용해 데이터센터의 기존 기계식 냉방부하를 대체하되, 과제에서 제시한 실내 조건, 냉수 조건, 기화기 duty, 배관 이송거리 제약을 동시에 만족하는 설계를 도출하는 것이다.",
-        "",
-        "이 연구가 답하려는 핵심 질문은 다음과 같다.",
-        "",
-        "- 대상 IDC의 총 냉방부하는 얼마인가?",
-        "- 요구 조건에서 이론 최소동력은 어느 수준인가?",
-        "- 기존 R-134a 기준 시스템과 LNG 보조 시스템은 어떻게 비교되는가?",
-        "- LNG와 IDC 사이 2차 루프에 가장 적합한 냉각유체는 무엇인가?",
-        "- 이송거리가 10 km에서 35 km로 증가해도 시스템이 성립하는가?",
-        "- 연간 전력, 비용, 탄소 효과는 어느 정도인가?",
-        "",
-        "## 2. 설계 기준",
-        "",
-        "- 과제 기반 입력값은 [base.toml](../config/base.toml)에 기록했다.",
-        "- 전체 출처 레지스트리는 [sources.md](../docs/sources.md)에 정리했다.",
-        "- 공학적 가정은 [assumptions.md](../docs/assumptions.md)에 따로 남겼다.",
-        "",
-        "핵심 입력값은 다음과 같다.",
-        "",
-        f"- IDC 총 냉방부하: **{_format_number(float(summary['IDC total cooling load']['value']))} kW**",
-        f"- LNG / NG 기화 duty: **{_format_number(float(summary['LNG vaporizer duty']['value']))} kW**",
-        f"- 기준 R-134a 압축기 동력: **{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW**",
-        f"- 선정 냉각유체: **{summary['Selected coolant']['value']}**",
-        "",
-        "## 3. 모델링 방법",
-        "",
-        "코드는 부하 계산, 이론 최소동력, 기준 증기압축 사이클, 냉각유체 스크리닝, LNG 기화기 설계, 장거리 배관 설계, 민감도 분석, 연간 효과 계산으로 나누어 구성했다.",
-        "",
-        "주요 결과는 아래 그림들로 요약된다.",
-        "",
-        "![부하 구성](../output/figures/load_breakdown.png)",
-        "",
-        "![기준 사이클](../output/figures/baseline_cycle_ph.png)",
-        "",
-        "![냉각유체 순위](../output/figures/fluid_ranking.png)",
-        "",
-        "![열교환기 온도 프로파일](../output/figures/hx_temperature_profile.png)",
-        "",
-        "![배관 트레이드오프](../output/figures/pipeline_tradeoff.png)",
-        "",
-        "## 4. 주요 결과",
-        "",
-        _markdown_table(
-            pd.DataFrame(
-                [
-                    {"항목": "냉방부하", "값": f"{_format_number(float(summary['IDC total cooling load']['value']))} kW"},
-                    {"항목": "이론 최소동력", "값": f"{_format_number(float(summary['Theoretical minimum power']['value']))} kW"},
-                    {"항목": "기준 R-134a 동력", "값": f"{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW"},
-                    {"항목": "선정 냉각유체", "값": summary["Selected coolant"]["value"]},
-                    {"항목": "LNG 루프 펌프동력", "값": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
-                    {"항목": "전력 절감", "값": f"{_format_number(float(summary['Baseline-to-LNG power saving']['value']))} kW"},
-                ]
-            ),
-            ["항목", "값"],
-        ),
-        "",
-        "### 4.1 냉각유체 선정",
-        "",
-        _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "펌프동력 (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"]),
-        "",
-        f"기본 설계점에서 최적 유체는 **{selected_alternative['fluid']}**였으며, 이는 LNG 기화기와 장거리 배관 설계를 모두 만족하는 범위 안에서 루프 펌프동력을 최소화했다.",
-        "",
-        "### 4.2 거리 민감도",
-        "",
-        _markdown_table(distance_table, ["거리 (km)", "펌프동력 (kW)", "열유입 (kW)", "열여유 (kW)", "IDC 부하 충족"]),
-        "",
-        "![거리 민감도](../output/figures/pipeline_distance_sensitivity.png)",
-        "",
-        (
-            f"현재 duty 여유 기준에서 **{_format_number(long_distance['distance_km'])} km** 장거리 조건은 "
-            f"**{'성립' if bool(long_distance['meets_idc_load']) else '불성립'}**이다. "
-            f"선정 설계의 추정 최대 편도 성립거리는 약 **{_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km**다."
-        ),
-        "",
-        "### 4.3 공급온도 민감도",
-        "",
-        _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "펌프동력 (kW)", "최대 성립거리 (km)", "35 km 충족", "상태"]),
-        "",
-        "![공급온도 민감도](../output/figures/supply_temperature_sensitivity.png)",
-        "",
-        (
-            f"공급온도 스윕에서 펌프동력이 가장 낮은 지점은 **{_format_number(best_temp['supply_temp_c'])} °C**이며, "
-            f"이때도 우선 유체는 **{best_temp['selected_fluid']}**로 유지된다. "
-            f"반면 **-43.1 °C** 수준으로 공급온도를 높이면 35 km 조건을 만족시킬 수 있지만, **R-600a**로 바뀌고 펌프동력 증가를 감수해야 한다."
-        ),
-        "",
-        "### 4.4 연간 효과",
-        "",
-        _markdown_table(annual_report, ["항목", "값", "단위"]),
-        "",
-        "![연간 효과](../output/figures/annual_impact_comparison.png)",
-        "",
-        "단순 회수기간 기준 허용 가능한 추가 투자비는 다음과 같다.",
-        "",
-        _markdown_table(
-            payback.assign(
-                **{
-                    "회수기간 (년)": payback["payback_years"],
-                    "허용 추가 투자비 (백만원)": payback["allowable_incremental_capex_krw"].map(
-                        lambda x: _format_number(x / 1_000_000.0)
-                    ),
-                }
-            ),
-            ["회수기간 (년)", "허용 추가 투자비 (백만원)"],
-        ),
-        "",
-        "## 5. 기존 엑셀 결과와 비교",
-        "",
-        _markdown_table(legacy_table, ["항목", "기존 엑셀 (kW)", "현재 코드 (kW)", "차이 (kW)", "차이율 (%)"]),
-        "",
-        "새 Python 워크플로우는 시스템 수준에서 기존 스프레드시트와 같은 규모의 결과를 재현하면서도, 가정과 출처, 시나리오 분석을 더 명확하게 드러낸다.",
-        "",
-        "## 6. 논의",
-        "",
-        "- 기본 10 km 설계는 기준 압축기 시스템 대비 큰 전력 절감과 함께 성립한다.",
-        "- 35 km 조건은 현재 기본 설계점에서 성립하지 않으며, 이것 자체가 중요한 설계 결론이다.",
-        "- 공급온도 수준을 조정하면 성립 거리를 늘릴 수 있지만, 다른 유체 선택과 더 큰 펌프동력 페널티를 수반한다.",
-        "- 연간 경제성은 현재 경계조건에서 매우 유리하지만, 보조기기, 유지보수, 금융비용, LNG 인프라 CAPEX는 아직 포함하지 않았다.",
-        "",
-        "## 7. 한계",
-        "",
-        "- v1에서는 LNG를 순수 메탄으로 가정했다.",
-        "- IDC 측 분배 네트워크는 전체 유압망이 아니라 냉방 duty 경계조건으로 단순화했다.",
-        "- 경제성 비교 범위는 기준 압축기 동력과 LNG 루프 펌프동력 비교에 한정된다.",
-        "- 응력, 재료 조달, 제어 통합 같은 상세 기계설계 검토는 현재 범위 밖이다.",
-        "",
-        "## 8. 결론",
-        "",
-        (
-            "재구축된 프로젝트는 LNG 냉열 기반 냉각 개념이 10 km 설계점에서 기준 데이터센터 냉각 시스템의 전력 요구를 크게 줄일 수 있음을 보여준다. "
-            "선정된 기본안은 2차 루프에 암모니아를 사용하고, 쉘-튜브 LNG 기화기와 0.35 m 공급/환수 배관을 적용한다. "
-            "현재 경계조건에서 이 설계는 에너지 측면과 경제성 측면 모두 매력적이며, 후속 보고서 정리와 발표자료 고도화까지 연결할 수 있을 만큼 투명하다."
-        ),
-        "",
-        "## 참고문헌",
-        "",
-    ]
+    report_lines: list[str] = []
+    report_lines.extend(_build_report_front_matter(ctx))
+    report_lines.extend(_build_report_model_sections(ctx))
+    report_lines.extend(_build_report_result_sections(ctx))
     for source_id in ["SRC-001", "SRC-004", "SRC-005", "SRC-006", "SRC-007", "SRC-008", "SRC-009", "SRC-010", "SRC-011", "SRC-012", "SRC-013", "SRC-014"]:
         if source_id in sources:
             entry = sources[source_id]
