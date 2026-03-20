@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 output/
 src/lng_dc_design/__pycache__/
+src/*.egg-info/
 references/local/*.pdf
+references/web/gir_electricity_emission_factor_2024.html
