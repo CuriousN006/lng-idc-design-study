@@ -231,6 +231,82 @@ def _estimate_max_feasible_distance(
     return lower
 
 
+def _estimate_ambient_only_closure_distance(
+    config: dict,
+    fluid: str,
+    pressure_pa: float,
+    required_cooling_kw: float,
+    total_lng_duty_kw: float,
+    mass_flow_kg_s: float,
+    after_idc_temp_k: float,
+    minimum_return_to_lng_k: float,
+    minimum_line_heat_gain_required_kw: float,
+    selected: dict[str, float],
+    max_feasible_distance_m: float,
+    tolerance_kw: float = 1e-3,
+) -> float:
+    upper_case = _evaluate_pipeline_case(
+        config,
+        fluid,
+        pressure_pa,
+        required_cooling_kw,
+        total_lng_duty_kw,
+        mass_flow_kg_s,
+        after_idc_temp_k,
+        minimum_return_to_lng_k,
+        minimum_line_heat_gain_required_kw,
+        selected["supply_id_m"],
+        selected["return_id_m"],
+        selected["insulation_thickness_m"],
+        max_feasible_distance_m,
+    )
+    if (not bool(upper_case["feasible"])) or float(upper_case["supplemental_warmup_kw"]) > tolerance_kw:
+        return math.nan
+
+    lower_case = _evaluate_pipeline_case(
+        config,
+        fluid,
+        pressure_pa,
+        required_cooling_kw,
+        total_lng_duty_kw,
+        mass_flow_kg_s,
+        after_idc_temp_k,
+        minimum_return_to_lng_k,
+        minimum_line_heat_gain_required_kw,
+        selected["supply_id_m"],
+        selected["return_id_m"],
+        selected["insulation_thickness_m"],
+        0.0,
+    )
+    if bool(lower_case["feasible"]) and float(lower_case["supplemental_warmup_kw"]) <= tolerance_kw:
+        return 0.0
+
+    lower = 0.0
+    upper = max_feasible_distance_m
+    for _ in range(25):
+        mid = 0.5 * (lower + upper)
+        mid_case = _evaluate_pipeline_case(
+            config,
+            fluid,
+            pressure_pa,
+            required_cooling_kw,
+            total_lng_duty_kw,
+            mass_flow_kg_s,
+            after_idc_temp_k,
+            minimum_return_to_lng_k,
+            minimum_line_heat_gain_required_kw,
+            selected["supply_id_m"],
+            selected["return_id_m"],
+            selected["insulation_thickness_m"],
+            mid,
+        )
+        if bool(mid_case["feasible"]) and float(mid_case["supplemental_warmup_kw"]) <= tolerance_kw:
+            upper = mid
+        else:
+            lower = mid
+    return upper
+
+
 def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: float) -> dict[str, object]:
     loop = config["coolant_loop"]
     pipe_cfg = config["pipeline_design"]
@@ -309,6 +385,19 @@ def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: flo
         minimum_line_heat_gain_required_kw,
         selected,
     )
+    ambient_only_closure_distance_m = _estimate_ambient_only_closure_distance(
+        config,
+        fluid,
+        pressure_pa,
+        required_cooling_kw,
+        total_lng_duty_kw,
+        mass_flow_kg_s,
+        after_idc_temp_k,
+        minimum_return_to_lng_k,
+        minimum_line_heat_gain_required_kw,
+        selected,
+        max_feasible_distance_m,
+    )
 
     return {
         "scan_table": frame.reset_index(drop=True),
@@ -317,6 +406,7 @@ def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: flo
         "target_heat_gain_kw": total_lng_duty_kw - required_cooling_kw,
         "base_distance_m": config["assignment"]["pipeline_distance_m"],
         "max_feasible_distance_m": max_feasible_distance_m,
+        "ambient_only_closure_distance_m": ambient_only_closure_distance_m,
         "after_idc_temp_k": after_idc_temp_k,
         "return_to_lng_temp_k": float(selected["return_to_lng_temp_k"]),
         "minimum_return_to_lng_k": minimum_return_to_lng_k,

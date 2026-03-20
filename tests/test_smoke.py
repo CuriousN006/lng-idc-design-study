@@ -12,7 +12,13 @@ from lng_dc_design.hx_lng_vaporizer import design_lng_vaporizer
 from lng_dc_design.idc_hx import evaluate_idc_heat_exchange
 from lng_dc_design.load_model import compute_load_model
 from lng_dc_design.pipeline_loop import design_pipeline
-from lng_dc_design.scenario_study import _merge_fluid_with_pipeline, build_distance_scenarios, evaluate_feasible_alternatives, evaluate_supply_temperature_sweep
+from lng_dc_design.scenario_study import (
+    _merge_fluid_with_pipeline,
+    build_distance_scenarios,
+    evaluate_ambient_closure_map,
+    evaluate_feasible_alternatives,
+    evaluate_supply_temperature_sweep,
+)
 from lng_dc_design.system_eval import evaluate_system
 from lng_dc_design.thermo_limit import compute_theoretical_minimum_power
 
@@ -42,6 +48,7 @@ class SmokeTest(unittest.TestCase):
         scenario_result = evaluate_feasible_alternatives(self.config, load_result, baseline, screening)
         distance_scenarios = build_distance_scenarios(self.config, load_result, baseline, hx_result, pipeline_result)
         supply_temperature_sweep = evaluate_supply_temperature_sweep(self.config, load_result, baseline)
+        ambient_closure_map = evaluate_ambient_closure_map(self.config, load_result, baseline)
         system_eval = evaluate_system(self.config, load_result, minimum_power, baseline, screening, hx_result, pipeline_result)
 
         self.assertGreater(load_result.total_kw, 11_000.0)
@@ -68,6 +75,12 @@ class SmokeTest(unittest.TestCase):
         self.assertIn(target_distance_m, set(distance_scenarios["distance_m"].tolist()))
         self.assertGreaterEqual(len(supply_temperature_sweep), 2)
         self.assertIn("feasible", set(supply_temperature_sweep["status"].tolist()))
+        self.assertFalse(ambient_closure_map["table"].empty)
+        self.assertIsNotNone(ambient_closure_map["selected"])
+        self.assertGreater(
+            float(ambient_closure_map["selected"]["ambient_only_closure_distance_km"]),
+            self.config["assignment"]["pipeline_distance_m"] / 1000.0,
+        )
         self.assertGreater(system_eval["annual"]["cost_saving_krw_per_year"], 0.0)
 
     def test_build_deliverables(self) -> None:

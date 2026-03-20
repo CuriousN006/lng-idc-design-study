@@ -13,7 +13,13 @@ from .legacy_compare import compare_with_legacy_excel
 from .load_model import compute_load_model
 from .pipeline_loop import design_pipeline
 from .report_assets import write_outputs
-from .scenario_study import _merge_fluid_with_pipeline, build_distance_scenarios, evaluate_feasible_alternatives, evaluate_supply_temperature_sweep
+from .scenario_study import (
+    _merge_fluid_with_pipeline,
+    build_distance_scenarios,
+    evaluate_ambient_closure_map,
+    evaluate_feasible_alternatives,
+    evaluate_supply_temperature_sweep,
+)
 from .system_eval import evaluate_system
 from .thermo_limit import compute_theoretical_minimum_power
 from .validation import validate_run
@@ -39,6 +45,7 @@ def run_all(config_path: Path) -> dict[str, object]:
     scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening)
     distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
     supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
+    ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline)
     system_eval = evaluate_system(values, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, legacy_result)
     validation_messages = validate_run(project_root, cfg, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, system_eval)
     write_outputs(
@@ -54,6 +61,7 @@ def run_all(config_path: Path) -> dict[str, object]:
         scenario_result,
         distance_scenarios,
         supply_temperature_sweep,
+        ambient_closure_map,
         system_eval,
         validation_messages,
         legacy_result,
@@ -70,6 +78,7 @@ def run_all(config_path: Path) -> dict[str, object]:
         "scenario": scenario_result,
         "distance_scenarios": distance_scenarios,
         "supply_temperature_sweep": supply_temperature_sweep,
+        "ambient_closure_map": ambient_closure_map,
         "system": system_eval,
         "validation": validation_messages,
     }
@@ -131,9 +140,12 @@ def main() -> int:
         scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening)
         distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
         supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
+        ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline)
         print(distance_scenarios.to_string(index=False))
         print()
         print(supply_temperature_sweep.to_string(index=False))
+        print()
+        print(ambient_closure_map["table"].to_string(index=False))
         print()
         print(scenario_result["alternatives"].to_string(index=False))
         return 0

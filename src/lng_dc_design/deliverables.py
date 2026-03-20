@@ -458,7 +458,22 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
             f"기본 유체는 **{ctx['best_supply_fluid']}**로 유지된다. {ctx['recover_35km_text']}"
         ),
         "",
-        "### 4.6 연간 효과와 경제성",
+        "### 4.6 추가 warm-up 제거 가능성",
+        "",
+        str(ctx["closure_md"]),
+        "",
+        "![무보조 warm-up 성립거리 맵](../output/figures/ambient_closure_map.png)",
+        "",
+        (
+            f"현재 탐색 범위에서 가장 이른 무보조 warm-up 성립점은 **{ctx['best_closure_temp_c']} °C / "
+            f"{ctx['best_closure_fluid']}** 조합이며, ambient heat gain만으로 LNG hot-end를 만족시키려면 "
+            f"최소 **{ctx['best_closure_distance_km']} km**의 편도 거리가 필요했다. "
+            f"이때의 루프 펌프동력은 **{ctx['best_closure_pump_kw']} kW**였다."
+        ),
+        "",
+        str(ctx["closure_interpretation_text"]),
+        "",
+        "### 4.7 연간 효과와 경제성",
         "",
         str(ctx["annual_md"]),
         "",
@@ -472,7 +487,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
             f"연간 **{ctx['annual_avoided_tco2']} tCO2/년**의 간접배출을 회피한다."
         ),
         "",
-        "### 4.7 기존 엑셀 결과와 비교",
+        "### 4.8 기존 엑셀 결과와 비교",
         "",
         str(ctx["legacy_md"]),
         "",
@@ -491,7 +506,13 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         (ctx["long_distance_extension_text"]),
         "",
         (
-            "넷째, 등가 COP와 연간 절감량은 매우 크지만, 현 단계의 경제성 경계는 압축기 동력 대 펌프동력 비교에 한정되어 있다."
+            f"넷째, 추가 warm-up을 완전히 제거하는 관점에서 보면 현재 **{ctx['base_distance_km']} km** 기본거리는 "
+            "아직 충분한 ambient pickup을 제공하지 못한다. 따라서 현 기본안은 순수 LNG 냉열 단독안이라기보다, "
+            "LNG hot-end 조건을 맞추기 위한 보조 열원 또는 더 긴 배관거리의 도움을 받는 하이브리드 운전점으로 읽는 편이 더 정확하다."
+        ),
+        "",
+        (
+            "다섯째, 등가 COP와 연간 절감량은 매우 크지만, 현 단계의 경제성 경계는 압축기 동력 대 펌프동력 비교에 한정되어 있다."
         ),
         "",
         "## 6. 한계와 향후 확장",
@@ -535,6 +556,7 @@ def build_report(project_root: Path) -> Path:
     alternatives = pd.read_csv(output_dir / "alternative_designs.csv")
     distance = pd.read_csv(output_dir / "distance_scenarios.csv")
     temperature = pd.read_csv(output_dir / "supply_temperature_sweep.csv")
+    ambient_closure = pd.read_csv(output_dir / "ambient_closure_map.csv")
     annual = pd.read_csv(output_dir / "annual_summary.csv")
     payback = pd.read_csv(output_dir / "payback_allowable_capex.csv")
     legacy = pd.read_csv(output_dir / "legacy_comparison.csv")
@@ -547,6 +569,14 @@ def build_report(project_root: Path) -> Path:
     selected_pipeline = pipeline_scan.iloc[0]
     long_distance = distance.sort_values("distance_km").iloc[-1]
     best_temp = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw").iloc[0]
+    feasible_closure = ambient_closure[ambient_closure["status"] == "feasible"].copy()
+    closure_candidates = feasible_closure[feasible_closure["ambient_only_closure_distance_km"].notna()].sort_values(
+        ["ambient_only_closure_distance_km", "pump_power_kw", "screening_score"],
+        ascending=[True, True, False],
+    )
+    best_closure = closure_candidates.iloc[0] if not closure_candidates.empty else None
+    base_warmup_free = feasible_closure[feasible_closure["warmup_free_at_base_distance"] == True]
+    long_warmup_free = feasible_closure[feasible_closure["warmup_free_at_long_distance"] == True]
     recover_35km = temperature[
         (temperature["status"] == "feasible") & (temperature["long_distance_meets_load"] == True)
     ].sort_values("pump_power_kw")
@@ -611,6 +641,16 @@ def build_report(project_root: Path) -> Path:
             "상태": temperature["status"].replace({"feasible": "성립", "failed": "실패"}),
         }
     )
+    closure_table = pd.DataFrame(
+        {
+            "공급온도 (°C)": closure_candidates["supply_temp_c"].map(_format_number),
+            "유체": closure_candidates["fluid"],
+            "기본안 추가 warm-up (kW)": closure_candidates["supplemental_warmup_kw"].map(_format_number),
+            "무보조 성립거리 (km)": closure_candidates["ambient_only_closure_distance_km"].map(_format_number),
+            "35 km 무보조 성립": closure_candidates["warmup_free_at_long_distance"].map(lambda x: "예" if bool(x) else "아니오"),
+            "기본 스크리닝 선정": closure_candidates["selected_by_screening"].map(lambda x: "예" if bool(x) else "아니오"),
+        }
+    ).head(8)
     legacy_table = pd.DataFrame(
         {
             "항목": legacy["metric"].replace(
@@ -695,6 +735,10 @@ def build_report(project_root: Path) -> Path:
     alternatives_md = _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "펌프동력 (kW)", "추가 warm-up (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"])
     distance_md = _markdown_table(distance_table, ["거리 (km)", "펌프동력 (kW)", "열유입 (kW)", "추가 warm-up (kW)", "열여유 (kW)", "IDC 부하 충족"])
     temperature_md = _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "펌프동력 (kW)", "최대 성립거리 (km)", "35 km 충족", "상태"])
+    closure_md = _markdown_table(
+        closure_table,
+        ["공급온도 (°C)", "유체", "기본안 추가 warm-up (kW)", "무보조 성립거리 (km)", "35 km 무보조 성립", "기본 스크리닝 선정"],
+    )
     annual_md = _markdown_table(annual_report, ["항목", "값", "단위"])
     payback_md = _markdown_table(
         payback.assign(
@@ -813,12 +857,34 @@ def build_report(project_root: Path) -> Path:
             "즉, 운전점과 유체 선택을 바꾸면 회복 가능할 수도 있지만, 그 대가로 펌프동력과 설계 복잡성이 증가한다."
         )
 
+    if best_closure is not None and base_warmup_free.empty and long_warmup_free.empty:
+        closure_interpretation_text = (
+            f"현재 탐색 범위에서는 10 km와 35 km 모두 ambient heat gain만으로 LNG hot-end를 만족시키지 못했고, "
+            f"가장 빠른 무보조 성립거리도 **{_format_number(best_closure['ambient_only_closure_distance_km'])} km**였다. "
+            "따라서 현재 추가 warm-up 항은 단순 수치 보정이 아니라, 물리적으로 의미 있는 보조 열원 요구량으로 해석하는 편이 맞다."
+        )
+    elif best_closure is not None and base_warmup_free.empty:
+        best_long = long_warmup_free.sort_values(["pump_power_kw", "ambient_only_closure_distance_km"]).iloc[0]
+        closure_interpretation_text = (
+            f"10 km 기본안에서는 무보조 운전점이 없지만, **{_format_number(best_long['supply_temp_c'])} °C / {best_long['fluid']}** "
+            "조합은 35 km 거리에서 추가 warm-up 없이도 성립한다. 즉 장거리망은 오히려 hot-end 제약 완화에 유리할 수 있다."
+        )
+    elif not base_warmup_free.empty:
+        best_base = base_warmup_free.sort_values(["pump_power_kw", "ambient_only_closure_distance_km"]).iloc[0]
+        closure_interpretation_text = (
+            f"현재 탐색 범위 안에서도 **{_format_number(best_base['supply_temp_c'])} °C / {best_base['fluid']}** 조합은 "
+            "기본 10 km 거리에서 추가 warm-up 없이 성립한다. 따라서 보조 열원 항은 기본안 선택의 결과이지 절대적인 필수조건은 아니다."
+        )
+    else:
+        closure_interpretation_text = "현재 탐색 범위에서는 무보조 warm-up 성립거리 해석을 위한 추가 후보가 충분하지 않았다."
+
     ctx: dict[str, object] = {
         "input_conditions_md": input_conditions_md,
         "load_table_md": load_table_md,
         "alternatives_md": alternatives_md,
         "distance_md": distance_md,
         "temperature_md": temperature_md,
+        "closure_md": closure_md,
         "annual_md": annual_md,
         "payback_md": payback_md,
         "legacy_md": legacy_md,
@@ -839,6 +905,7 @@ def build_report(project_root: Path) -> Path:
         "annual_cost_saving_mkrw": _format_number(float(summary["Annual electricity cost saving"]["value"]) / 1_000_000.0),
         "annual_avoided_tco2": _format_number(float(summary["Annual avoided indirect emissions"]["value"])),
         "equivalent_cop": _format_number(float(summary["Equivalent cooling COP"]["value"]), 1),
+        "base_distance_km": _format_number(config["assignment"]["pipeline_distance_m"] / 1000.0),
         "max_distance_km": _format_number(distance["max_feasible_distance_m"].iloc[0] / 1000.0),
         "idc_hx_area_m2": _format_number(float(summary["IDC-side HX required area"]["value"])),
         "idc_after_temp_c": _format_celsius(float(summary["IDC coolant outlet temperature"]["value"])),
@@ -865,6 +932,11 @@ def build_report(project_root: Path) -> Path:
         "best_supply_temp_c": _format_number(best_temp["supply_temp_c"]),
         "best_supply_fluid": best_temp["selected_fluid"],
         "recover_35km_text": recover_35km_text,
+        "best_closure_temp_c": _format_number(best_closure["supply_temp_c"]) if best_closure is not None else "-",
+        "best_closure_fluid": best_closure["fluid"] if best_closure is not None else "-",
+        "best_closure_distance_km": _format_number(best_closure["ambient_only_closure_distance_km"]) if best_closure is not None else "-",
+        "best_closure_pump_kw": _format_number(best_closure["pump_power_kw"]) if best_closure is not None else "-",
+        "closure_interpretation_text": closure_interpretation_text,
     }
 
     report_path = deliverables_dir / "report_draft.md"

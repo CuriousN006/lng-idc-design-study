@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from pathlib import Path
 
@@ -97,12 +98,19 @@ def validate_run(project_root: Path, config, load_result, minimum_power, baselin
     if long_distance_rows.empty:
         raise AssertionError(f"Configured long-distance checkpoint {target_distance:.1f} m is missing from the sensitivity table.")
     long_distance = long_distance_rows.iloc[0]
-    available_long_distance_kw = hx_result["required_lng_duty_kw"] - float(long_distance["heat_gain_kw"])
-    if bool(long_distance["feasible"]) and available_long_distance_kw >= load_result.total_kw:
+    available_long_distance_kw = float(long_distance["available_cooling_kw"])
+    if bool(long_distance["feasible"]) and available_long_distance_kw >= load_result.total_kw - 1e-6:
         messages.append("Long-distance pipeline case still satisfies the IDC load.")
     else:
         messages.append("Long-distance pipeline case is infeasible at the current duty margin because heat gain exceeds the available buffer.")
     messages.append(f"Estimated maximum feasible one-way pipeline distance is about {pipeline_result['max_feasible_distance_m'] / 1000.0:.1f} km.")
+    ambient_only_closure_distance_m = float(pipeline_result.get("ambient_only_closure_distance_m", math.nan))
+    if math.isfinite(ambient_only_closure_distance_m):
+        messages.append(
+            f"Ambient-only closure occurs near {ambient_only_closure_distance_m / 1000.0:.1f} km, so shorter distances still require supplemental warm-up under the current hot-end constraint."
+        )
+    else:
+        messages.append("No feasible ambient-only closure point was found before the selected pipeline loses feasibility.")
 
     feasible_fluids = screening["table"][screening["table"]["feasible"]]
     if feasible_fluids.empty:

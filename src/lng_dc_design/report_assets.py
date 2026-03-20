@@ -201,6 +201,30 @@ def _save_supply_temperature_sweep(output_dir: Path, supply_temperature_sweep: p
     plt.close(fig)
 
 
+def _save_ambient_closure_map(output_dir: Path, ambient_closure_map: pd.DataFrame) -> None:
+    feasible = ambient_closure_map[ambient_closure_map["status"] == "feasible"].copy()
+    if feasible.empty:
+        return
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for fluid, group in feasible.groupby("fluid"):
+        ordered = group.sort_values("supply_temp_c")
+        ax.plot(
+            ordered["supply_temp_c"],
+            ordered["ambient_only_closure_distance_km"],
+            marker="o",
+            label=fluid,
+        )
+    ax.axhline(feasible["base_distance_km"].iloc[0], color="#8b0000", linestyle="--", linewidth=1.2, label="Base distance")
+    ax.axhline(feasible["long_distance_km"].iloc[0], color="#1d7874", linestyle=":", linewidth=1.4, label="Long-distance target")
+    ax.set_xlabel("Coolant supply temperature (C)")
+    ax.set_ylabel("Ambient-only closure distance (km)")
+    ax.set_title("Distance Required to Eliminate Supplemental Warm-up")
+    ax.legend(ncol=2, fontsize=8)
+    fig.tight_layout()
+    fig.savefig(output_dir / "ambient_closure_map.png", dpi=180)
+    plt.close(fig)
+
+
 def _save_annual_impact(output_dir: Path, annual_metrics: dict) -> None:
     labels = ["Electricity use", "Electricity cost", "Indirect emissions"]
     baseline_values = [
@@ -307,6 +331,7 @@ def write_outputs(
     scenario_result: dict,
     distance_scenarios: pd.DataFrame,
     supply_temperature_sweep: pd.DataFrame,
+    ambient_closure_map: dict,
     system_eval: dict,
     validation_messages: list[str],
     legacy_result: dict | None = None,
@@ -326,6 +351,7 @@ def write_outputs(
     scenario_result["alternatives"].to_csv(output_dir / "alternative_designs.csv", index=False)
     distance_scenarios.to_csv(output_dir / "distance_scenarios.csv", index=False)
     supply_temperature_sweep.to_csv(output_dir / "supply_temperature_sweep.csv", index=False)
+    ambient_closure_map["table"].to_csv(output_dir / "ambient_closure_map.csv", index=False)
     requirement_traceability = _build_requirement_traceability(system_eval)
     requirement_traceability.to_csv(output_dir / "requirement_traceability.csv", index=False)
     annual_summary = pd.DataFrame(
@@ -354,6 +380,7 @@ def write_outputs(
     _save_legacy_comparison(figure_dir, legacy_result)
     _save_alternative_designs(figure_dir, scenario_result)
     _save_supply_temperature_sweep(figure_dir, supply_temperature_sweep)
+    _save_ambient_closure_map(figure_dir, ambient_closure_map["table"])
     _save_annual_impact(figure_dir, system_eval["annual"])
 
     base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
@@ -361,6 +388,10 @@ def write_outputs(
     long_distance_row = distance_scenarios.sort_values("distance_m").iloc[-1]
     feasible_supply_sweep = supply_temperature_sweep[supply_temperature_sweep["status"] == "feasible"].sort_values("pump_power_kw")
     best_supply_row = feasible_supply_sweep.iloc[0] if not feasible_supply_sweep.empty else None
+    feasible_closure = ambient_closure_map["table"][ambient_closure_map["table"]["status"] == "feasible"].copy()
+    base_warmup_free = feasible_closure[feasible_closure["warmup_free_at_base_distance"]]
+    long_warmup_free = feasible_closure[feasible_closure["warmup_free_at_long_distance"]]
+    best_closure = ambient_closure_map["selected"]
     report_lines = [
         "# LNG Cold-Energy IDC Cooling System Summary",
         "",
@@ -422,6 +453,22 @@ def write_outputs(
     report_lines.extend(
         [
         "",
+        "## Ambient-Only Closure",
+        "",
+        f"- Warm-up-free design at base distance: **{not base_warmup_free.empty}**",
+        f"- Warm-up-free design at long-distance target: **{not long_warmup_free.empty}**",
+        (
+            f"- Best ambient-only closure point: **{best_closure['supply_temp_c']:.1f} C / {best_closure['fluid']}**, "
+            f"closure distance **{best_closure['ambient_only_closure_distance_km']:.1f} km**, "
+            f"pump power **{best_closure['pump_power_kw']:,.1f} kW**"
+        )
+        if best_closure is not None
+        else "- No ambient-only closure point was found within the feasible search space.",
+        (
+            f"- Interpretation: the current {base_distance_row['distance_km']:.1f} km base case still needs "
+            f"**{base_distance_row['supplemental_warmup_kw']:,.1f} kW** of supplemental warm-up, so the hybrid heat-addition term is a physical requirement under this hot-end constraint."
+        ),
+        "",
         "## Alternative Coolants",
         "",
         ]
@@ -459,6 +506,7 @@ def write_outputs(
             "- `output/alternative_designs.csv`",
             "- `output/distance_scenarios.csv`",
             "- `output/supply_temperature_sweep.csv`",
+            "- `output/ambient_closure_map.csv`",
             "- `output/annual_summary.csv`",
             "- `output/payback_allowable_capex.csv`",
             "- `output/requirement_traceability.csv`",

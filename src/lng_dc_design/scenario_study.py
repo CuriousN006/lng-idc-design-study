@@ -19,6 +19,13 @@ def _merge_fluid_with_pipeline(selected_fluid: dict, pipeline_result: dict) -> d
     return merged
 
 
+def _target_distance_row(sensitivity: pd.DataFrame, target_distance_m: float) -> pd.Series:
+    target_rows = sensitivity.loc[(sensitivity["distance_m"] - target_distance_m).abs() < 1e-6]
+    if not target_rows.empty:
+        return target_rows.iloc[0]
+    return sensitivity.iloc[(sensitivity["distance_m"] - target_distance_m).abs().argmin()]
+
+
 def evaluate_feasible_alternatives(config: dict, load_result: object, baseline: dict, screening: dict) -> dict[str, object]:
     rows: list[dict[str, object]] = []
     feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
@@ -149,10 +156,7 @@ def evaluate_supply_temperature_sweep(config: dict, load_result: object, baselin
             )
             selected_design = pipeline_result["selected_design"]
             target_distance_m = float(trial_config["system_targets"]["long_distance_pipeline_m"])
-            long_distance_rows = pipeline_result["sensitivity"].loc[
-                (pipeline_result["sensitivity"]["distance_m"] - target_distance_m).abs() < 1e-6
-            ]
-            long_distance_row = long_distance_rows.iloc[0] if not long_distance_rows.empty else pipeline_result["sensitivity"].sort_values("distance_m").iloc[-1]
+            long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
             available_cooling_kw = (
                 hx_result["required_lng_duty_kw"]
                 - float(selected_design["heat_gain_kw"])
@@ -199,3 +203,117 @@ def evaluate_supply_temperature_sweep(config: dict, load_result: object, baselin
                 }
             )
     return add_annualized_columns(pd.DataFrame(rows).sort_values("supply_temp_k").reset_index(drop=True), "pump_power_kw", baseline["compressor_power_kw"], config)
+
+
+def evaluate_ambient_closure_map(config: dict, load_result: object, baseline: dict) -> dict[str, object]:
+    rows: list[dict[str, object]] = []
+    target_distance_m = float(config["system_targets"]["long_distance_pipeline_m"])
+    base_distance_m = float(config["assignment"]["pipeline_distance_m"])
+    tolerance_kw = 1e-3
+
+    for supply_temp_k in config.get("sensitivity", {}).get(
+        "coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]]
+    ):
+        trial_config = _with_supply_temperature(config, float(supply_temp_k))
+        screening = compute_fluid_screening(trial_config, load_result.total_kw)
+        feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
+
+        for _, candidate in feasible_candidates.iterrows():
+            selected_fluid = candidate.to_dict()
+            is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
+            try:
+                pipeline_result = design_pipeline(trial_config, selected_fluid, load_result.total_kw)
+                hx_result = design_lng_vaporizer(
+                    trial_config,
+                    _merge_fluid_with_pipeline(selected_fluid, pipeline_result),
+                    float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+                )
+                selected_design = pipeline_result["selected_design"]
+                long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
+                closure_distance_m = float(pipeline_result.get("ambient_only_closure_distance_m", math.nan))
+                closure_distance_km = closure_distance_m / 1000.0 if math.isfinite(closure_distance_m) else math.nan
+                warmup_free_at_base = (
+                    bool(selected_design["feasible"])
+                    and float(selected_design["supplemental_warmup_kw"]) <= tolerance_kw
+                )
+                warmup_free_at_long = (
+                    bool(long_distance_row["feasible"])
+                    and float(long_distance_row["supplemental_warmup_kw"]) <= tolerance_kw
+                )
+                rows.append(
+                    {
+                        "supply_temp_k": float(supply_temp_k),
+                        "supply_temp_c": float(supply_temp_k) - 273.15,
+                        "fluid": candidate["fluid"],
+                        "coolprop_name": candidate["coolprop_name"],
+                        "selected_by_screening": is_screening_selected,
+                        "screening_score": float(candidate["score"]),
+                        "pump_power_kw": float(selected_design["pump_power_kw"]),
+                        "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
+                        "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
+                        "actual_lng_duty_kw": float(selected_design["actual_lng_duty_kw"]),
+                        "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
+                        "ambient_only_closure_distance_km": closure_distance_km,
+                        "warmup_free_at_base_distance": warmup_free_at_base,
+                        "warmup_free_at_long_distance": warmup_free_at_long,
+                        "base_distance_km": base_distance_m / 1000.0,
+                        "long_distance_km": target_distance_m / 1000.0,
+                        "long_distance_supplemental_warmup_kw": float(long_distance_row["supplemental_warmup_kw"]),
+                        "long_distance_pump_power_kw": float(long_distance_row["pump_power_kw"]),
+                        "long_distance_feasible": bool(long_distance_row["feasible"]),
+                        "hx_min_pinch_k": float(hx_result["min_pinch_k"]),
+                        "status": "feasible",
+                        "failure_reason": "",
+                    }
+                )
+            except Exception as exc:  # pragma: no cover
+                rows.append(
+                    {
+                        "supply_temp_k": float(supply_temp_k),
+                        "supply_temp_c": float(supply_temp_k) - 273.15,
+                        "fluid": candidate["fluid"],
+                        "coolprop_name": candidate["coolprop_name"],
+                        "selected_by_screening": is_screening_selected,
+                        "screening_score": float(candidate["score"]),
+                        "pump_power_kw": math.nan,
+                        "pipeline_heat_gain_kw": math.nan,
+                        "supplemental_warmup_kw": math.nan,
+                        "actual_lng_duty_kw": math.nan,
+                        "max_feasible_distance_km": math.nan,
+                        "ambient_only_closure_distance_km": math.nan,
+                        "warmup_free_at_base_distance": False,
+                        "warmup_free_at_long_distance": False,
+                        "base_distance_km": base_distance_m / 1000.0,
+                        "long_distance_km": target_distance_m / 1000.0,
+                        "long_distance_supplemental_warmup_kw": math.nan,
+                        "long_distance_pump_power_kw": math.nan,
+                        "long_distance_feasible": False,
+                        "hx_min_pinch_k": math.nan,
+                        "status": "failed",
+                        "failure_reason": str(exc),
+                    }
+                )
+
+    frame = pd.DataFrame(rows)
+    frame["closure_rank_km"] = frame["ambient_only_closure_distance_km"].fillna(math.inf)
+    frame = frame.sort_values(
+        ["closure_rank_km", "pump_power_kw", "screening_score"],
+        ascending=[True, True, False],
+    ).drop(columns=["closure_rank_km"]).reset_index(drop=True)
+    frame = add_annualized_columns(frame, "pump_power_kw", baseline["compressor_power_kw"], config)
+
+    feasible_closure = frame[
+        (frame["status"] == "feasible") & (frame["ambient_only_closure_distance_km"].notna())
+    ].sort_values(["ambient_only_closure_distance_km", "pump_power_kw", "screening_score"], ascending=[True, True, False])
+
+    selected = feasible_closure.iloc[0].to_dict() if not feasible_closure.empty else None
+    return {
+        "table": frame,
+        "selected": selected,
+        "has_base_distance_warmup_free_design": bool(
+            ((frame["status"] == "feasible") & frame["warmup_free_at_base_distance"]).any()
+        ),
+        "has_long_distance_warmup_free_design": bool(
+            ((frame["status"] == "feasible") & frame["warmup_free_at_long_distance"]).any()
+        ),
+    }
