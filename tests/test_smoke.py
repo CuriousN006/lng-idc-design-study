@@ -17,6 +17,7 @@ from lng_dc_design.scenario_study import (
     build_distance_scenarios,
     evaluate_ambient_closure_map,
     evaluate_feasible_alternatives,
+    evaluate_passive_zero_warmup_search,
     evaluate_supply_temperature_sweep,
     evaluate_zero_warmup_target_search,
 )
@@ -100,6 +101,50 @@ class SmokeTest(unittest.TestCase):
         self.assertTrue(built["report"].exists())
         self.assertTrue(built["script"].exists())
         self.assertTrue(built["presentation"].exists())
+
+    def test_pipeline_thermal_case_extensions(self) -> None:
+        load_result = compute_load_model(self.config)
+        screening = compute_fluid_screening(self.config, load_result.total_kw)
+
+        baseline_pipeline = design_pipeline(self.config, screening["selected"], load_result.total_kw)
+        passive_air_pipeline = design_pipeline(
+            self.config,
+            screening["selected"],
+            load_result.total_kw,
+            thermal_case={
+                "mode": "air",
+                "ambient_air_temp_k": 313.15,
+                "wind_speed_m_per_s": 4.0,
+                "solar_absorbed_flux_w_per_m2": 300.0,
+                "pump_heat_to_fluid_fraction": 0.8,
+            },
+        )
+        buried_pipeline = design_pipeline(
+            self.config,
+            screening["selected"],
+            load_result.total_kw,
+            thermal_case={
+                "mode": "soil",
+                "soil_temperature_k": 298.15,
+                "soil_conductivity_w_per_mk": 1.5,
+                "burial_depth_m": 1.5,
+                "pump_heat_to_fluid_fraction": 0.8,
+            },
+        )
+
+        self.assertGreaterEqual(
+            float(passive_air_pipeline["selected_design"]["heat_gain_kw"]),
+            float(baseline_pipeline["selected_design"]["heat_gain_kw"]),
+        )
+        self.assertGreater(float(passive_air_pipeline["selected_design"]["pump_heat_to_fluid_kw"]), 0.0)
+        self.assertEqual(str(buried_pipeline["selected_design"]["thermal_mode"]), "soil")
+        self.assertGreater(float(buried_pipeline["selected_design"]["line_heat_gain_kw"]), 0.0)
+
+    def test_passive_zero_warmup_search(self) -> None:
+        passive_search = evaluate_passive_zero_warmup_search(self.config)
+        self.assertFalse(passive_search["table"].empty)
+        self.assertIn("baseline_air", passive_search["selected_by_scenario"])
+        self.assertIn("warm_buried_pipe", passive_search["selected_by_scenario"])
 
 
 if __name__ == "__main__":

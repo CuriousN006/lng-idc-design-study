@@ -1,6 +1,6 @@
 # Source Registry
 
-모든 외부 수치와 설계 기준은 아래 `SRC-ID`로 추적합니다. 접근일은 구현일 기준 `2026-03-20`입니다.
+모든 외부 수치와 설계 기준은 아래 `SRC-ID`로 추적합니다. 접근일은 최신 정리 기준 `2026-03-21`입니다.
 
 | ID | Title | Link or Local Path | Type | Used Values | Used In |
 | --- | --- | --- | --- | --- | --- |
@@ -17,8 +17,13 @@
 | SRC-012 | NIST Chemistry WebBook Methane Entry | [NIST Methane](https://webbook.nist.gov/cgi/cbook.cgi?Name=CH4), `references/web/nist_methane_webbook.html` | Official web | 메탄 물성/기초 식별 정보 보조 출처 | literature registry, methane documentation notes |
 | SRC-013 | KEA EG-TIPS standard energy saving project information | [KEA EG-TIPS](https://tips.energy.or.kr/purpose/standard_info.do), `references/web/kea_standard_info.html` | Official web | 산업용 전력 단가 105.05원/kWh, 전력 배출계수 0.4585 tCO2/MWh | annual energy, cost, and carbon metrics |
 | SRC-014 | GIR 2024 approved electricity emission factor announcement | [GIR electricity factor](https://www.gir.go.kr/home/board/read.do?boardId=82&boardMasterId=2&menuId=36&pagerOffset=30&maxPageItems=10&maxIndexPages=10&searchKey=&searchValue=) | Official web | 2024 승인 전력배출계수 공고의 공식 확인 경로 | source corroboration for carbon metrics |
+| SRC-015 | EnergyPlus Engineering Reference | [EnergyPlus Engineering Reference](https://energyplus.net/assets/nrel_custom/pdfs/pdfs_v23.1.0/EngineeringReference.pdf), `references/web/energyplus_engineering_reference_v23_1.pdf` | Official PDF | 외기 대류계수의 wind-speed correlation `h_c = 5.7 + 3.8 V_z` | passive heat pipeline model, wind-speed sensitivity rationale |
+| SRC-016 | EnergyPlus Ground Heat Exchanger example page | [EnergyPlus Ground Heat Exchanger](https://bigladdersoftware.com/epx/docs/8-0/input-output-reference/page-026.html), `references/web/energyplus_ground_heat_exchanger_reference.html` | Official web | buried pipe example inputs including burial depth 1.25 m and soil thermal conductivity 1.08 W/m-K | buried-pipe passive heat scenario basis |
+| SRC-017 | NREL NSRDB documentation | [NREL NSRDB](https://developer.nrel.gov/docs/solar/nsrdb/), `references/web/nrel_nsrdb_api.html` | Official web | 태양복사(GHI)·기온·풍속이 시간해상도 기상 입력으로 제공된다는 공식 데이터 체계 | passive heat scenario documentation, future weather-driven extensions |
+| SRC-018 | EnergyPlus Site:GroundTemperature:Undisturbed documentation | [EnergyPlus Ground Temperature Reference](https://bigladdersoftware.com/epx/docs/8-8/input-output-reference/group-location-climate-weather-file-access.html), `references/web/energyplus_ground_temperature_reference.html` | Official web | Kusuda-Achenbach 기반 지중온도 입력 구조와 example annual-average ground surface temperature 15.5 C | buried-pipe passive heat scenario basis, future soil-temperature model |
 
 ## Notes
 
 - HTML 페이지는 캐시 보관이 필수는 아니므로 URL과 접근일을 기록하고, 필요 시 `references/web/`에 스냅샷을 추가합니다.
 - 로컬 제공 PDF는 원본의 작업용 사본을 `references/local/`에 둡니다.
+- `passive_heat_search`의 모든 숫자가 직접 문헌 고정값인 것은 아닙니다. `SRC-015`~`SRC-018`은 모델식과 대표 예시 입력의 근거이고, 실제 시나리오 값 중 탐색용 envelope는 `docs/assumptions.md`의 `ASM-040`~`ASM-042`로 별도 추적합니다.

@@ -18,10 +18,12 @@ from .scenario_study import (
     build_distance_scenarios,
     evaluate_ambient_closure_map,
     evaluate_feasible_alternatives,
+    evaluate_passive_zero_warmup_search,
     evaluate_supply_temperature_sweep,
     evaluate_zero_warmup_target_search,
 )
 from .system_eval import evaluate_system
+from .thermo import ensure_directory
 from .thermo_limit import compute_theoretical_minimum_power
 from .validation import validate_run
 
@@ -101,7 +103,7 @@ def run_all(config_path: Path) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="LNG cold-energy IDC design toolkit")
-    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "scenario-study", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
+    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "scenario-study", "explore-passive-heat", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
     parser.add_argument("--config", required=True, help="Path to TOML configuration file")
     args = parser.parse_args()
     config_path = Path(args.config)
@@ -166,6 +168,35 @@ def main() -> int:
         print(zero_warmup_target_search["table"].to_string(index=False))
         print()
         print(scenario_result["alternatives"].to_string(index=False))
+        return 0
+
+    if args.command == "explore-passive-heat":
+        passive_search = evaluate_passive_zero_warmup_search(values)
+        output_dir = ensure_directory(config_path.resolve().parent.parent / "output")
+        output_path = output_dir / "passive_zero_warmup_search.csv"
+        passive_search["table"].to_csv(output_path, index=False)
+        print(output_path)
+        print()
+        for scenario_name, distance_map in passive_search["selected_by_scenario"].items():
+            print(f"[{scenario_name}]")
+            for target_distance_m, result in distance_map.items():
+                near_best = result["near_best"]
+                warmup_free = result["warmup_free"]
+                if warmup_free is not None:
+                    print(
+                        f"{target_distance_m / 1000.0:.1f} km: warm-up-free design found at "
+                        f"{warmup_free['supply_temp_c']:.1f} C / {warmup_free['fluid']}, "
+                        f"pump {warmup_free['best_design_pump_power_kw']:.1f} kW"
+                    )
+                elif near_best is not None:
+                    print(
+                        f"{target_distance_m / 1000.0:.1f} km: no warm-up-free design, best point "
+                        f"{near_best['supply_temp_c']:.1f} C / {near_best['fluid']}, "
+                        f"supplemental {near_best['minimum_supplemental_warmup_kw']:.1f} kW"
+                    )
+                else:
+                    print(f"{target_distance_m / 1000.0:.1f} km: no feasible candidate")
+            print()
         return 0
 
     if args.command == "build-report":

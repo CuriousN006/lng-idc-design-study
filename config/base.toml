@@ -284,6 +284,50 @@ source_id = "ASM-027"
 value = [210.0, 215.0, 220.0, 225.0, 230.0, 235.0, 240.0]
 source_id = "ASM-028"
 
+[passive_heat_search.supply_temp_candidates_k]
+value = [200.0, 205.0, 210.0, 215.0, 220.0, 225.0, 230.0]
+source_id = "ASM-037"
+
+[passive_heat_search.diameter_candidates_m]
+value = [0.075, 0.10, 0.125, 0.15, 0.175, 0.20, 0.225, 0.25, 0.275, 0.30, 0.35]
+source_id = "ASM-038"
+
+[passive_heat_search.insulation_thickness_candidates_m]
+value = [0.0, 0.01, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15]
+source_id = "ASM-039"
+
+[[passive_heat_search.scenarios]]
+name = "baseline_air"
+mode = "air"
+ambient_air_temp_k = 308.15
+wind_speed_m_per_s = 0.0
+solar_absorbed_flux_w_per_m2 = 0.0
+pump_heat_to_fluid_fraction = 0.0
+
+[[passive_heat_search.scenarios]]
+name = "summer_air_solar"
+mode = "air"
+ambient_air_temp_k = 308.15
+wind_speed_m_per_s = 2.0
+solar_absorbed_flux_w_per_m2 = 250.0
+pump_heat_to_fluid_fraction = 0.80
+
+[[passive_heat_search.scenarios]]
+name = "warm_buried_pipe"
+mode = "soil"
+soil_temperature_k = 288.65
+soil_conductivity_w_per_mk = 1.08
+burial_depth_m = 1.25
+pump_heat_to_fluid_fraction = 0.80
+
+[[passive_heat_search.scenarios]]
+name = "combined_passive"
+mode = "air"
+ambient_air_temp_k = 308.15
+wind_speed_m_per_s = 4.0
+solar_absorbed_flux_w_per_m2 = 300.0
+pump_heat_to_fluid_fraction = 0.80
+
 [economic_inputs.operating_hours_per_year]
 value = 8760.0
 source_id = "ASM-030"

@@ -5,7 +5,36 @@ import math
 import CoolProp.CoolProp as CP
 import pandas as pd
 
-from .thermo import cylindrical_heat_gain_w_per_length, darcy_friction_factor
+from .thermo import (
+    darcy_friction_factor,
+    buried_pipe_heat_gain_w_per_length,
+    exposed_pipe_heat_gain_w_per_length,
+    outside_h_from_wind_speed,
+)
+
+
+def _resolve_thermal_case(config: dict, thermal_case: dict[str, float | str] | None) -> dict[str, float | str]:
+    assignment = config["assignment"]
+    pipe_cfg = config["pipeline_design"]
+    resolved: dict[str, float | str] = {
+        "mode": "air",
+        "ambient_air_temp_k": float(assignment["ambient_air_temp_k"]),
+        "outside_h_w_per_m2k": float(pipe_cfg["outside_h_w_per_m2k"]),
+        "wind_speed_m_per_s": 0.0,
+        "solar_absorbed_flux_w_per_m2": 0.0,
+        "soil_temperature_k": float(assignment["ambient_air_temp_k"]),
+        "soil_conductivity_w_per_mk": 1.5,
+        "burial_depth_m": 1.5,
+        "pump_heat_to_fluid_fraction": 0.0,
+    }
+    if thermal_case:
+        resolved.update(thermal_case)
+    if "wind_speed_m_per_s" in resolved:
+        resolved["outside_h_w_per_m2k"] = outside_h_from_wind_speed(
+            float(resolved["wind_speed_m_per_s"]),
+            float(resolved["outside_h_w_per_m2k"]),
+        )
+    return resolved
 
 
 def _evaluate_pipeline_case(
@@ -22,10 +51,12 @@ def _evaluate_pipeline_case(
     return_id_m: float,
     insulation_thickness_m: float,
     distance_m: float,
+    thermal_case: dict[str, float | str] | None = None,
 ) -> dict[str, float | bool]:
     assignment = config["assignment"]
     loop = config["coolant_loop"]
     pipe_cfg = config["pipeline_design"]
+    thermal = _resolve_thermal_case(config, thermal_case)
 
     supply_temp_k = loop["supply_temp_k"]
     h_supply = float(CP.PropsSI("H", "T", supply_temp_k, "P", pressure_pa, fluid))
@@ -44,6 +75,8 @@ def _evaluate_pipeline_case(
     return_rho = 0.0
     dp_supply = 0.0
     dp_return = 0.0
+    line_heat_gain_kw = 0.0
+    pump_heat_to_fluid_kw = 0.0
 
     for _ in range(40):
         return_avg_temp_k = 0.5 * (after_idc_temp_k + return_to_lng_temp_k)
@@ -78,24 +111,49 @@ def _evaluate_pipeline_case(
 
         supply_outer_radius = 0.5 * (supply_id_m + 2.0 * pipe_cfg["pipe_wall_thickness_m"])
         return_outer_radius = 0.5 * (return_id_m + 2.0 * pipe_cfg["pipe_wall_thickness_m"])
-        q_supply_w_per_m = cylindrical_heat_gain_w_per_length(
-            supply_outer_radius,
-            supply_outer_radius + insulation_thickness_m,
-            pipe_cfg["insulation_conductivity_w_per_mk"],
-            pipe_cfg["outside_h_w_per_m2k"],
-            assignment["ambient_air_temp_k"],
-            supply_avg_temp_k,
-        )
-        q_return_w_per_m = cylindrical_heat_gain_w_per_length(
-            return_outer_radius,
-            return_outer_radius + insulation_thickness_m,
-            pipe_cfg["insulation_conductivity_w_per_mk"],
-            pipe_cfg["outside_h_w_per_m2k"],
-            assignment["ambient_air_temp_k"],
-            return_avg_temp_k,
-        )
-        heat_gain_w = (q_supply_w_per_m + q_return_w_per_m) * distance_m
-        heat_gain_kw = heat_gain_w / 1000.0
+        if str(thermal["mode"]).lower() == "soil":
+            q_supply_w_per_m = buried_pipe_heat_gain_w_per_length(
+                supply_outer_radius,
+                supply_outer_radius + insulation_thickness_m,
+                pipe_cfg["insulation_conductivity_w_per_mk"],
+                float(thermal["soil_conductivity_w_per_mk"]),
+                float(thermal["burial_depth_m"]),
+                float(thermal["soil_temperature_k"]),
+                supply_avg_temp_k,
+            )
+            q_return_w_per_m = buried_pipe_heat_gain_w_per_length(
+                return_outer_radius,
+                return_outer_radius + insulation_thickness_m,
+                pipe_cfg["insulation_conductivity_w_per_mk"],
+                float(thermal["soil_conductivity_w_per_mk"]),
+                float(thermal["burial_depth_m"]),
+                float(thermal["soil_temperature_k"]),
+                return_avg_temp_k,
+            )
+        else:
+            q_supply_w_per_m = exposed_pipe_heat_gain_w_per_length(
+                supply_outer_radius,
+                supply_outer_radius + insulation_thickness_m,
+                pipe_cfg["insulation_conductivity_w_per_mk"],
+                float(thermal["outside_h_w_per_m2k"]),
+                float(thermal["ambient_air_temp_k"]),
+                supply_avg_temp_k,
+                float(thermal["solar_absorbed_flux_w_per_m2"]),
+            )
+            q_return_w_per_m = exposed_pipe_heat_gain_w_per_length(
+                return_outer_radius,
+                return_outer_radius + insulation_thickness_m,
+                pipe_cfg["insulation_conductivity_w_per_mk"],
+                float(thermal["outside_h_w_per_m2k"]),
+                float(thermal["ambient_air_temp_k"]),
+                return_avg_temp_k,
+                float(thermal["solar_absorbed_flux_w_per_m2"]),
+            )
+        line_heat_gain_w = (q_supply_w_per_m + q_return_w_per_m) * distance_m
+        line_heat_gain_kw = line_heat_gain_w / 1000.0
+        pump_power_w = (dp_supply * q_supply + dp_return * q_return) / pipe_cfg["pump_isentropic_efficiency"]
+        pump_heat_to_fluid_kw = float(thermal["pump_heat_to_fluid_fraction"]) * pump_power_w / 1000.0
+        heat_gain_kw = line_heat_gain_kw + pump_heat_to_fluid_kw
         supplemental_reheat_kw = max(minimum_line_heat_gain_required_kw - heat_gain_kw, 0.0)
         total_external_heat_kw = heat_gain_kw + supplemental_reheat_kw
         actual_lng_duty_kw = required_cooling_kw + total_external_heat_kw
@@ -107,10 +165,9 @@ def _evaluate_pipeline_case(
             break
         return_to_lng_temp_k = 0.5 * (return_to_lng_temp_k + new_return_to_lng_temp_k)
 
-    heat_gain_kw = heat_gain_w / 1000.0
+    pump_power_w = (dp_supply * q_supply + dp_return * q_return) / pipe_cfg["pump_isentropic_efficiency"]
     available_cooling_kw = actual_lng_duty_kw - heat_gain_kw - supplemental_reheat_kw
     design_target_margin_kw = total_lng_duty_kw - heat_gain_kw - required_cooling_kw
-    pump_power_w = (dp_supply * q_supply + dp_return * q_return) / pipe_cfg["pump_isentropic_efficiency"]
     heat_gain_fraction = heat_gain_kw / max(actual_lng_duty_kw, 1e-9)
     hot_end_margin_k = return_to_lng_temp_k - minimum_return_to_lng_k
     thermal_margin_kw = available_cooling_kw - required_cooling_kw
@@ -133,6 +190,8 @@ def _evaluate_pipeline_case(
         "velocity_return_m_per_s": velocity_return,
         "dp_supply_kpa": dp_supply / 1000.0,
         "dp_return_kpa": dp_return / 1000.0,
+        "line_heat_gain_kw": line_heat_gain_kw,
+        "pump_heat_to_fluid_kw": pump_heat_to_fluid_kw,
         "heat_gain_kw": heat_gain_kw,
         "heat_gain_fraction": heat_gain_fraction,
         "supplemental_warmup_kw": supplemental_reheat_kw,
@@ -148,6 +207,7 @@ def _evaluate_pipeline_case(
         "return_phase": return_phase,
         "meets_utilization_target": design_target_margin_kw >= -1e-6,
         "feasible": feasible,
+        "thermal_mode": str(thermal["mode"]),
     }
 
 
@@ -162,6 +222,7 @@ def _estimate_max_feasible_distance(
     minimum_return_to_lng_k: float,
     minimum_line_heat_gain_required_kw: float,
     selected: dict[str, float],
+    thermal_case: dict[str, float | str] | None = None,
 ) -> float:
     lower = 0.0
     upper = max(
@@ -183,6 +244,7 @@ def _estimate_max_feasible_distance(
         selected["return_id_m"],
         selected["insulation_thickness_m"],
         upper,
+        thermal_case,
     )
 
     while bool(upper_case["feasible"]) and upper < 250_000.0:
@@ -202,6 +264,7 @@ def _estimate_max_feasible_distance(
             selected["return_id_m"],
             selected["insulation_thickness_m"],
             upper,
+            thermal_case,
         )
 
     if bool(upper_case["feasible"]):
@@ -223,6 +286,7 @@ def _estimate_max_feasible_distance(
             selected["return_id_m"],
             selected["insulation_thickness_m"],
             mid,
+            thermal_case,
         )
         if bool(mid_case["feasible"]):
             lower = mid
@@ -244,6 +308,7 @@ def _estimate_ambient_only_closure_distance(
     selected: dict[str, float],
     max_feasible_distance_m: float,
     tolerance_kw: float = 1e-3,
+    thermal_case: dict[str, float | str] | None = None,
 ) -> float:
     upper_case = _evaluate_pipeline_case(
         config,
@@ -259,6 +324,7 @@ def _estimate_ambient_only_closure_distance(
         selected["return_id_m"],
         selected["insulation_thickness_m"],
         max_feasible_distance_m,
+        thermal_case,
     )
     if (not bool(upper_case["feasible"])) or float(upper_case["supplemental_warmup_kw"]) > tolerance_kw:
         return math.nan
@@ -277,6 +343,7 @@ def _estimate_ambient_only_closure_distance(
         selected["return_id_m"],
         selected["insulation_thickness_m"],
         0.0,
+        thermal_case,
     )
     if bool(lower_case["feasible"]) and float(lower_case["supplemental_warmup_kw"]) <= tolerance_kw:
         return 0.0
@@ -299,6 +366,7 @@ def _estimate_ambient_only_closure_distance(
             selected["return_id_m"],
             selected["insulation_thickness_m"],
             mid,
+            thermal_case,
         )
         if bool(mid_case["feasible"]) and float(mid_case["supplemental_warmup_kw"]) <= tolerance_kw:
             upper = mid
@@ -307,7 +375,12 @@ def _estimate_ambient_only_closure_distance(
     return upper
 
 
-def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: float) -> dict[str, object]:
+def design_pipeline(
+    config: dict,
+    selected_fluid: dict,
+    required_cooling_kw: float,
+    thermal_case: dict[str, float | str] | None = None,
+) -> dict[str, object]:
     loop = config["coolant_loop"]
     pipe_cfg = config["pipeline_design"]
     pressure_pa = loop["pressure_mpa"] * 1_000_000.0
@@ -337,6 +410,7 @@ def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: flo
                     return_id_m,
                     insulation_thickness_m,
                     config["assignment"]["pipeline_distance_m"],
+                    thermal_case,
                 )
                 rows.append(row)
 
@@ -368,6 +442,7 @@ def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: flo
                 float(selected["return_id_m"]),
                 float(selected["insulation_thickness_m"]),
                 float(distance_m),
+                thermal_case,
             )
             for distance_m in distance_candidates
         ]
@@ -384,6 +459,7 @@ def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: flo
         minimum_return_to_lng_k,
         minimum_line_heat_gain_required_kw,
         selected,
+        thermal_case,
     )
     ambient_only_closure_distance_m = _estimate_ambient_only_closure_distance(
         config,
@@ -397,6 +473,7 @@ def design_pipeline(config: dict, selected_fluid: dict, required_cooling_kw: flo
         minimum_line_heat_gain_required_kw,
         selected,
         max_feasible_distance_m,
+        thermal_case=thermal_case,
     )
 
     return {

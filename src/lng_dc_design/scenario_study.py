@@ -5,9 +5,11 @@ import math
 
 import pandas as pd
 
+from .baseline_vcc import compute_baseline_cycle
 from .economics import add_annualized_columns
 from .fluid_screening import compute_fluid_screening
 from .hx_lng_vaporizer import design_lng_vaporizer
+from .load_model import compute_load_model
 from .pipeline_loop import design_pipeline
 
 
@@ -145,6 +147,22 @@ def _with_supply_temperature(config: dict, supply_temp_k: float) -> dict:
 def _with_pipeline_distance(config: dict, distance_m: float) -> dict:
     trial = deepcopy(config)
     trial["assignment"]["pipeline_distance_m"] = distance_m
+    return trial
+
+
+def _with_pipeline_search_grid(config: dict, diameter_candidates_m: list[float], insulation_candidates_m: list[float]) -> dict:
+    trial = deepcopy(config)
+    trial["pipeline_design"]["diameter_candidates_m"] = [float(value) for value in diameter_candidates_m]
+    trial["pipeline_design"]["insulation_thickness_candidates_m"] = [float(value) for value in insulation_candidates_m]
+    return trial
+
+
+def _with_environment_overrides(config: dict, thermal_case: dict[str, object]) -> dict:
+    trial = deepcopy(config)
+    if "ambient_air_temp_k" in thermal_case:
+        trial["assignment"]["ambient_air_temp_k"] = float(thermal_case["ambient_air_temp_k"])
+    if "ambient_relative_humidity" in thermal_case:
+        trial["assignment"]["ambient_relative_humidity"] = float(thermal_case["ambient_relative_humidity"])
     return trial
 
 
@@ -439,4 +457,184 @@ def evaluate_zero_warmup_target_search(config: dict, load_result: object, baseli
     return {
         "table": frame,
         "selected_by_distance": selected_by_distance,
+    }
+
+
+def evaluate_passive_zero_warmup_search(config: dict) -> dict[str, object]:
+    search_cfg = config.get("passive_heat_search", {})
+    scenarios = list(search_cfg.get("scenarios", []))
+    if not scenarios:
+        raise RuntimeError("No passive heat-search scenarios were configured.")
+
+    target_distances_m = sorted(
+        {
+            float(config["assignment"]["pipeline_distance_m"]),
+            float(config["system_targets"]["long_distance_pipeline_m"]),
+        }
+    )
+    supply_temp_candidates_k = list(
+        search_cfg.get("supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]])
+    )
+    diameter_candidates_m = list(
+        search_cfg.get("diameter_candidates_m", config["pipeline_design"]["diameter_candidates_m"])
+    )
+    insulation_candidates_m = list(
+        search_cfg.get(
+            "insulation_thickness_candidates_m",
+            config["pipeline_design"]["insulation_thickness_candidates_m"],
+        )
+    )
+
+    rows: list[dict[str, object]] = []
+    tolerance_kw = 1e-3
+
+    for scenario in scenarios:
+        scenario_name = str(scenario.get("name", "unnamed"))
+        thermal_case = {key: value for key, value in scenario.items() if key != "name"}
+        scenario_config = _with_environment_overrides(config, thermal_case)
+        load_result = compute_load_model(scenario_config)
+        baseline = compute_baseline_cycle(scenario_config, load_result.total_kw)
+
+        for target_distance_m in target_distances_m:
+            for supply_temp_k in supply_temp_candidates_k:
+                trial_config = _with_supply_temperature(scenario_config, float(supply_temp_k))
+                trial_config = _with_pipeline_distance(trial_config, float(target_distance_m))
+                trial_config = _with_pipeline_search_grid(trial_config, diameter_candidates_m, insulation_candidates_m)
+                screening = compute_fluid_screening(trial_config, load_result.total_kw)
+                feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
+
+                for _, candidate in feasible_candidates.iterrows():
+                    selected_fluid = candidate.to_dict()
+                    is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
+                    try:
+                        pipeline_result = design_pipeline(
+                            trial_config,
+                            selected_fluid,
+                            load_result.total_kw,
+                            thermal_case=thermal_case,
+                        )
+                        feasible_scan = pipeline_result["scan_table"][pipeline_result["scan_table"]["feasible"]].copy()
+                        if feasible_scan.empty:
+                            raise RuntimeError("No feasible pipeline design found for the configured passive-heat case.")
+
+                        min_supplemental_design = feasible_scan.sort_values(
+                            ["supplemental_warmup_kw", "pump_power_kw", "heat_gain_kw"],
+                            ascending=[True, True, True],
+                        ).iloc[0]
+                        zero_warmup_designs = feasible_scan[
+                            feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
+                        ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
+                        best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
+
+                        rows.append(
+                            {
+                                "scenario_name": scenario_name,
+                                "thermal_mode": str(thermal_case.get("mode", "air")),
+                                "ambient_air_temp_k": float(
+                                    thermal_case.get("ambient_air_temp_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                                ),
+                                "wind_speed_m_per_s": float(thermal_case.get("wind_speed_m_per_s", 0.0)),
+                                "solar_absorbed_flux_w_per_m2": float(
+                                    thermal_case.get("solar_absorbed_flux_w_per_m2", 0.0)
+                                ),
+                                "soil_temperature_k": float(
+                                    thermal_case.get("soil_temperature_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                                ),
+                                "pump_heat_to_fluid_fraction": float(
+                                    thermal_case.get("pump_heat_to_fluid_fraction", 0.0)
+                                ),
+                                "target_distance_m": float(target_distance_m),
+                                "target_distance_km": float(target_distance_m) / 1000.0,
+                                "required_cooling_kw": float(load_result.total_kw),
+                                "baseline_power_kw": float(baseline["compressor_power_kw"]),
+                                "supply_temp_k": float(supply_temp_k),
+                                "supply_temp_c": float(supply_temp_k) - 273.15,
+                                "fluid": candidate["fluid"],
+                                "coolprop_name": candidate["coolprop_name"],
+                                "selected_by_screening": is_screening_selected,
+                                "screening_score": float(candidate["score"]),
+                                "zero_warmup_design_found": not zero_warmup_designs.empty,
+                                "minimum_supplemental_warmup_kw": float(min_supplemental_design["supplemental_warmup_kw"]),
+                                "best_design_line_heat_gain_kw": float(best_design["line_heat_gain_kw"]),
+                                "best_design_pump_heat_to_fluid_kw": float(best_design["pump_heat_to_fluid_kw"]),
+                                "best_design_total_heat_gain_kw": float(best_design["heat_gain_kw"]),
+                                "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
+                                "best_design_supply_id_m": float(best_design["supply_id_m"]),
+                                "best_design_return_id_m": float(best_design["return_id_m"]),
+                                "best_design_insulation_thickness_m": float(best_design["insulation_thickness_m"]),
+                                "best_design_power_saving_kw": float(baseline["compressor_power_kw"]) - float(best_design["pump_power_kw"]),
+                                "status": "feasible",
+                                "failure_reason": "",
+                            }
+                        )
+                    except Exception as exc:  # pragma: no cover
+                        rows.append(
+                            {
+                                "scenario_name": scenario_name,
+                                "thermal_mode": str(thermal_case.get("mode", "air")),
+                                "ambient_air_temp_k": float(
+                                    thermal_case.get("ambient_air_temp_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                                ),
+                                "wind_speed_m_per_s": float(thermal_case.get("wind_speed_m_per_s", 0.0)),
+                                "solar_absorbed_flux_w_per_m2": float(
+                                    thermal_case.get("solar_absorbed_flux_w_per_m2", 0.0)
+                                ),
+                                "soil_temperature_k": float(
+                                    thermal_case.get("soil_temperature_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                                ),
+                                "pump_heat_to_fluid_fraction": float(
+                                    thermal_case.get("pump_heat_to_fluid_fraction", 0.0)
+                                ),
+                                "target_distance_m": float(target_distance_m),
+                                "target_distance_km": float(target_distance_m) / 1000.0,
+                                "required_cooling_kw": float(load_result.total_kw),
+                                "baseline_power_kw": float(baseline["compressor_power_kw"]),
+                                "supply_temp_k": float(supply_temp_k),
+                                "supply_temp_c": float(supply_temp_k) - 273.15,
+                                "fluid": candidate["fluid"],
+                                "coolprop_name": candidate["coolprop_name"],
+                                "selected_by_screening": is_screening_selected,
+                                "screening_score": float(candidate["score"]),
+                                "zero_warmup_design_found": False,
+                                "minimum_supplemental_warmup_kw": math.nan,
+                                "best_design_line_heat_gain_kw": math.nan,
+                                "best_design_pump_heat_to_fluid_kw": math.nan,
+                                "best_design_total_heat_gain_kw": math.nan,
+                                "best_design_pump_power_kw": math.nan,
+                                "best_design_supply_id_m": math.nan,
+                                "best_design_return_id_m": math.nan,
+                                "best_design_insulation_thickness_m": math.nan,
+                                "best_design_power_saving_kw": math.nan,
+                                "status": "failed",
+                                "failure_reason": str(exc),
+                            }
+                        )
+
+    frame = pd.DataFrame(rows).sort_values(
+        ["scenario_name", "target_distance_m", "minimum_supplemental_warmup_kw", "best_design_pump_power_kw", "screening_score"],
+        ascending=[True, True, True, True, False],
+    ).reset_index(drop=True)
+
+    selected_by_scenario: dict[str, dict[float, dict[str, object] | None]] = {}
+    for scenario_name in sorted(frame["scenario_name"].dropna().unique()):
+        selected_by_scenario[scenario_name] = {}
+        scenario_rows = frame[(frame["scenario_name"] == scenario_name) & (frame["status"] == "feasible")].copy()
+        for target_distance_m in target_distances_m:
+            distance_rows = scenario_rows[(scenario_rows["target_distance_m"] - target_distance_m).abs() < 1e-6].copy()
+            zero_rows = distance_rows[distance_rows["zero_warmup_design_found"]].sort_values(
+                ["best_design_pump_power_kw", "minimum_supplemental_warmup_kw", "screening_score"],
+                ascending=[True, True, False],
+            )
+            near_best = distance_rows.sort_values(
+                ["minimum_supplemental_warmup_kw", "best_design_pump_power_kw", "screening_score"],
+                ascending=[True, True, False],
+            )
+            selected_by_scenario[scenario_name][target_distance_m] = {
+                "warmup_free": zero_rows.iloc[0].to_dict() if not zero_rows.empty else None,
+                "near_best": near_best.iloc[0].to_dict() if not near_best.empty else None,
+            }
+
+    return {
+        "table": frame,
+        "selected_by_scenario": selected_by_scenario,
     }

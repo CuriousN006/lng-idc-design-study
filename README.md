@@ -23,6 +23,7 @@ python -m lng_dc_design screen-fluids --config config/base.toml
 python -m lng_dc_design design-hx --config config/base.toml
 python -m lng_dc_design analyze-pipeline --config config/base.toml
 python -m lng_dc_design scenario-study --config config/base.toml
+python -m lng_dc_design explore-passive-heat --config config/base.toml
 python -m lng_dc_design build-report --config config/base.toml
 python -m lng_dc_design build-slides --config config/base.toml
 python -m lng_dc_design build-deliverables --config config/base.toml

@@ -40,3 +40,9 @@
 | ASM-034 | Chilled-water specific heat | 4,180 J/kg-K | 7/12°C 단상 냉수의 대표 비열값 |
 | ASM-035 | IDC-side HX model structure | Counterflow 2-point pinch model with 7/12°C chilled water and minimum approach constraint | IDC 부하측 열교환기와 2차 루프를 전체 네트워크 없이도 물리적으로 연결하기 위한 최소 모델 |
 | ASM-036 | Ambient-only closure criterion | First feasible one-way distance where supplemental warm-up falls below 1e-3 kW | 추가 warm-up이 필요 없는 설계점을 정량적으로 찾기 위한 판정 기준 |
+| ASM-037 | Passive heat-search supply-temperature grid | 200-230 K in 5 K steps | 기본 설계점보다 더 저온까지 내려가며 무보조 성립 가능성을 확인하기 위한 확장 sweep |
+| ASM-038 | Passive heat-search diameter grid | 0.075-0.35 m | 자연 열유입을 활용하는 공격적 배관 탐색에서 직경 제약을 더 넓게 보기 위한 확장 범위 |
+| ASM-039 | Passive heat-search insulation grid | 0.00-0.15 m | 무보조 성립을 위해 의도적으로 단열을 줄이는 극단 설계까지 확인하기 위한 탐색 범위 |
+| ASM-040 | Passive heat-search wind-speed cases | 0, 2, 4 m/s | `SRC-015`의 wind-based outside convection correlation 위에서 자연대류, 약한 바람, 비교적 강한 바람의 탐색용 경계조건을 주기 위한 시나리오 값 |
+| ASM-041 | Passive heat-search net absorbed solar flux | 0, 250, 300 W/m2 | `SRC-017`의 태양복사/기상 데이터 체계 위에서 노출 배관이 받는 순흡수 열유속의 탐색용 envelope를 주기 위한 값이며, 현 단계에서는 site-specific weather replay가 아니라 scenario study용 |
+| ASM-042 | Pump heat returned to loop in passive scenarios | 80% of pump power | 폐회로에서 펌프 소비동력의 대부분이 결국 루프 열로 환원된다는 점을 반영한 탐색용 상한 가정이며, 상세 기기 열수지 없이 과도한 100% 귀속을 피하기 위한 보수적 절충값 |

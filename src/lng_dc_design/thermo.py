@@ -92,6 +92,52 @@ def cylindrical_heat_gain_w_per_length(
     return (ambient_temperature_k - fluid_temperature_k) / (conduction + convection)
 
 
+def outside_h_from_wind_speed(wind_speed_m_per_s: float, base_h_w_per_m2k: float) -> float:
+    if wind_speed_m_per_s <= 0.0:
+        return base_h_w_per_m2k
+    return max(base_h_w_per_m2k, 5.7 + 3.8 * wind_speed_m_per_s)
+
+
+def exposed_pipe_heat_gain_w_per_length(
+    inner_radius_m: float,
+    insulation_outer_radius_m: float,
+    insulation_k_w_per_mk: float,
+    outside_h_w_per_m2k: float,
+    ambient_temperature_k: float,
+    fluid_temperature_k: float,
+    solar_absorbed_flux_w_per_m2: float = 0.0,
+) -> float:
+    convective_gain = cylindrical_heat_gain_w_per_length(
+        inner_radius_m,
+        insulation_outer_radius_m,
+        insulation_k_w_per_mk,
+        outside_h_w_per_m2k,
+        ambient_temperature_k,
+        fluid_temperature_k,
+    )
+    projected_diameter_m = 2.0 * insulation_outer_radius_m
+    solar_gain = max(solar_absorbed_flux_w_per_m2, 0.0) * projected_diameter_m
+    return convective_gain + solar_gain
+
+
+def buried_pipe_heat_gain_w_per_length(
+    inner_radius_m: float,
+    insulation_outer_radius_m: float,
+    insulation_k_w_per_mk: float,
+    soil_conductivity_w_per_mk: float,
+    burial_depth_m: float,
+    soil_temperature_k: float,
+    fluid_temperature_k: float,
+) -> float:
+    if burial_depth_m <= insulation_outer_radius_m:
+        raise ValueError("Burial depth must exceed the insulated outer radius.")
+    conduction = math.log(insulation_outer_radius_m / inner_radius_m) / (2.0 * math.pi * insulation_k_w_per_mk)
+    soil_resistance = math.log((4.0 * burial_depth_m) / (2.0 * insulation_outer_radius_m)) / (
+        2.0 * math.pi * soil_conductivity_w_per_mk
+    )
+    return (soil_temperature_k - fluid_temperature_k) / (conduction + soil_resistance)
+
+
 def bundle_shell_diameter_m(tube_count: int, pitch_m: float, packing_efficiency: float, clearance_factor: float) -> float:
     cell_area = math.sqrt(3.0) * pitch_m ** 2 / 2.0
     bundle_area = tube_count * cell_area / packing_efficiency
