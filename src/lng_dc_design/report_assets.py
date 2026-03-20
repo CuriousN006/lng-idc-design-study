@@ -225,6 +225,38 @@ def _save_ambient_closure_map(output_dir: Path, ambient_closure_map: pd.DataFram
     plt.close(fig)
 
 
+def _save_zero_warmup_gap(output_dir: Path, zero_warmup_target_search: pd.DataFrame) -> None:
+    feasible = zero_warmup_target_search[zero_warmup_target_search["status"] == "feasible"].copy()
+    if feasible.empty:
+        return
+    best_by_supply = (
+        feasible.sort_values(
+            ["target_distance_m", "supply_temp_k", "minimum_supplemental_warmup_kw", "best_design_pump_power_kw"],
+            ascending=[True, True, True, True],
+        )
+        .groupby(["target_distance_m", "supply_temp_k"], as_index=False)
+        .first()
+        .sort_values(["target_distance_m", "supply_temp_k"])
+    )
+    fig, ax = plt.subplots(figsize=(9, 5))
+    for target_distance_km, group in best_by_supply.groupby("target_distance_m"):
+        ordered = group.sort_values("supply_temp_c")
+        ax.plot(
+            ordered["supply_temp_c"],
+            ordered["minimum_supplemental_warmup_kw"],
+            marker="o",
+            label=f"{target_distance_km / 1000.0:.0f} km target",
+        )
+    ax.axhline(0.0, color="#333333", linewidth=1.0, linestyle="--")
+    ax.set_xlabel("Coolant supply temperature (C)")
+    ax.set_ylabel("Minimum supplemental warm-up in scan (kW)")
+    ax.set_title("Target-Distance Search for Zero Supplemental Warm-up")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_dir / "zero_warmup_gap.png", dpi=180)
+    plt.close(fig)
+
+
 def _save_annual_impact(output_dir: Path, annual_metrics: dict) -> None:
     labels = ["Electricity use", "Electricity cost", "Indirect emissions"]
     baseline_values = [
@@ -332,6 +364,7 @@ def write_outputs(
     distance_scenarios: pd.DataFrame,
     supply_temperature_sweep: pd.DataFrame,
     ambient_closure_map: dict,
+    zero_warmup_target_search: dict,
     system_eval: dict,
     validation_messages: list[str],
     legacy_result: dict | None = None,
@@ -352,6 +385,7 @@ def write_outputs(
     distance_scenarios.to_csv(output_dir / "distance_scenarios.csv", index=False)
     supply_temperature_sweep.to_csv(output_dir / "supply_temperature_sweep.csv", index=False)
     ambient_closure_map["table"].to_csv(output_dir / "ambient_closure_map.csv", index=False)
+    zero_warmup_target_search["table"].to_csv(output_dir / "zero_warmup_target_search.csv", index=False)
     requirement_traceability = _build_requirement_traceability(system_eval)
     requirement_traceability.to_csv(output_dir / "requirement_traceability.csv", index=False)
     annual_summary = pd.DataFrame(
@@ -381,6 +415,7 @@ def write_outputs(
     _save_alternative_designs(figure_dir, scenario_result)
     _save_supply_temperature_sweep(figure_dir, supply_temperature_sweep)
     _save_ambient_closure_map(figure_dir, ambient_closure_map["table"])
+    _save_zero_warmup_gap(figure_dir, zero_warmup_target_search["table"])
     _save_annual_impact(figure_dir, system_eval["annual"])
 
     base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
@@ -392,6 +427,9 @@ def write_outputs(
     base_warmup_free = feasible_closure[feasible_closure["warmup_free_at_base_distance"]]
     long_warmup_free = feasible_closure[feasible_closure["warmup_free_at_long_distance"]]
     best_closure = ambient_closure_map["selected"]
+    zero_search_by_distance = zero_warmup_target_search["selected_by_distance"]
+    base_distance_target = float(pipeline_result["base_distance_m"])
+    long_distance_target = float(long_distance_row["distance_m"])
     report_lines = [
         "# LNG Cold-Energy IDC Cooling System Summary",
         "",
@@ -469,6 +507,31 @@ def write_outputs(
             f"**{base_distance_row['supplemental_warmup_kw']:,.1f} kW** of supplemental warm-up, so the hybrid heat-addition term is a physical requirement under this hot-end constraint."
         ),
         "",
+        "## Zero-Warmup Target Search",
+        "",
+        (
+            f"- Base-distance warm-up-free design found: **{zero_search_by_distance[base_distance_target]['warmup_free'] is not None}**"
+        ),
+        (
+            f"- Best base-distance near-feasible point: **{zero_search_by_distance[base_distance_target]['near_best']['supply_temp_c']:.1f} C / "
+            f"{zero_search_by_distance[base_distance_target]['near_best']['fluid']}**, minimum supplemental "
+            f"**{zero_search_by_distance[base_distance_target]['near_best']['minimum_supplemental_warmup_kw']:,.1f} kW**, "
+            f"pump **{zero_search_by_distance[base_distance_target]['near_best']['best_design_pump_power_kw']:,.1f} kW**"
+        )
+        if zero_search_by_distance[base_distance_target]["near_best"] is not None
+        else "- No feasible base-distance candidate remained in the target-distance search.",
+        (
+            f"- Long-distance warm-up-free design found: **{zero_search_by_distance[long_distance_target]['warmup_free'] is not None}**"
+        ),
+        (
+            f"- Best long-distance near-feasible point: **{zero_search_by_distance[long_distance_target]['near_best']['supply_temp_c']:.1f} C / "
+            f"{zero_search_by_distance[long_distance_target]['near_best']['fluid']}**, minimum supplemental "
+            f"**{zero_search_by_distance[long_distance_target]['near_best']['minimum_supplemental_warmup_kw']:,.1f} kW**, "
+            f"pump **{zero_search_by_distance[long_distance_target]['near_best']['best_design_pump_power_kw']:,.1f} kW**"
+        )
+        if zero_search_by_distance[long_distance_target]["near_best"] is not None
+        else "- No feasible long-distance candidate remained in the target-distance search.",
+        "",
         "## Alternative Coolants",
         "",
         ]
@@ -507,6 +570,7 @@ def write_outputs(
             "- `output/distance_scenarios.csv`",
             "- `output/supply_temperature_sweep.csv`",
             "- `output/ambient_closure_map.csv`",
+            "- `output/zero_warmup_target_search.csv`",
             "- `output/annual_summary.csv`",
             "- `output/payback_allowable_capex.csv`",
             "- `output/requirement_traceability.csv`",

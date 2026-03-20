@@ -14,7 +14,18 @@ def _extract_ids(path: Path) -> set[str]:
     return set(ID_PATTERN.findall(path.read_text(encoding="utf-8")))
 
 
-def validate_run(project_root: Path, config, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, system_eval) -> list[str]:
+def validate_run(
+    project_root: Path,
+    config,
+    load_result,
+    minimum_power,
+    baseline,
+    screening,
+    hx_result,
+    pipeline_result,
+    system_eval,
+    zero_warmup_target_search: dict | None = None,
+) -> list[str]:
     messages: list[str] = []
 
     if not config.citations:
@@ -111,6 +122,20 @@ def validate_run(project_root: Path, config, load_result, minimum_power, baselin
         )
     else:
         messages.append("No feasible ambient-only closure point was found before the selected pipeline loses feasibility.")
+
+    if zero_warmup_target_search:
+        base_distance = float(config.values["assignment"]["pipeline_distance_m"])
+        long_distance_target = float(config.values["system_targets"]["long_distance_pipeline_m"])
+        base_search = zero_warmup_target_search["selected_by_distance"].get(base_distance)
+        long_search = zero_warmup_target_search["selected_by_distance"].get(long_distance_target)
+        if base_search and base_search["warmup_free"] is None and base_search["near_best"] is not None:
+            messages.append(
+                f"No warm-up-free design was found at the {base_distance / 1000.0:.1f} km target; the best grid point still needs {base_search['near_best']['minimum_supplemental_warmup_kw']:.1f} kW."
+            )
+        if long_search and long_search["warmup_free"] is None and long_search["near_best"] is not None:
+            messages.append(
+                f"No warm-up-free design was found at the {long_distance_target / 1000.0:.1f} km target; the best grid point still needs {long_search['near_best']['minimum_supplemental_warmup_kw']:.1f} kW."
+            )
 
     feasible_fluids = screening["table"][screening["table"]["feasible"]]
     if feasible_fluids.empty:

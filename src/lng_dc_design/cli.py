@@ -19,6 +19,7 @@ from .scenario_study import (
     evaluate_ambient_closure_map,
     evaluate_feasible_alternatives,
     evaluate_supply_temperature_sweep,
+    evaluate_zero_warmup_target_search,
 )
 from .system_eval import evaluate_system
 from .thermo_limit import compute_theoretical_minimum_power
@@ -46,8 +47,20 @@ def run_all(config_path: Path) -> dict[str, object]:
     distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
     supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
     ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline)
+    zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline)
     system_eval = evaluate_system(values, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, legacy_result)
-    validation_messages = validate_run(project_root, cfg, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, system_eval)
+    validation_messages = validate_run(
+        project_root,
+        cfg,
+        load_result,
+        minimum_power,
+        baseline,
+        screening,
+        hx_result,
+        pipeline_result,
+        system_eval,
+        zero_warmup_target_search,
+    )
     write_outputs(
         project_root,
         config_path,
@@ -62,6 +75,7 @@ def run_all(config_path: Path) -> dict[str, object]:
         distance_scenarios,
         supply_temperature_sweep,
         ambient_closure_map,
+        zero_warmup_target_search,
         system_eval,
         validation_messages,
         legacy_result,
@@ -79,6 +93,7 @@ def run_all(config_path: Path) -> dict[str, object]:
         "distance_scenarios": distance_scenarios,
         "supply_temperature_sweep": supply_temperature_sweep,
         "ambient_closure_map": ambient_closure_map,
+        "zero_warmup_target_search": zero_warmup_target_search,
         "system": system_eval,
         "validation": validation_messages,
     }
@@ -141,11 +156,14 @@ def main() -> int:
         distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
         supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
         ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline)
+        zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline)
         print(distance_scenarios.to_string(index=False))
         print()
         print(supply_temperature_sweep.to_string(index=False))
         print()
         print(ambient_closure_map["table"].to_string(index=False))
+        print()
+        print(zero_warmup_target_search["table"].to_string(index=False))
         print()
         print(scenario_result["alternatives"].to_string(index=False))
         return 0

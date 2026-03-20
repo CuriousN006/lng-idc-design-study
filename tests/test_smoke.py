@@ -18,6 +18,7 @@ from lng_dc_design.scenario_study import (
     evaluate_ambient_closure_map,
     evaluate_feasible_alternatives,
     evaluate_supply_temperature_sweep,
+    evaluate_zero_warmup_target_search,
 )
 from lng_dc_design.system_eval import evaluate_system
 from lng_dc_design.thermo_limit import compute_theoretical_minimum_power
@@ -49,6 +50,7 @@ class SmokeTest(unittest.TestCase):
         distance_scenarios = build_distance_scenarios(self.config, load_result, baseline, hx_result, pipeline_result)
         supply_temperature_sweep = evaluate_supply_temperature_sweep(self.config, load_result, baseline)
         ambient_closure_map = evaluate_ambient_closure_map(self.config, load_result, baseline)
+        zero_warmup_target_search = evaluate_zero_warmup_target_search(self.config, load_result, baseline)
         system_eval = evaluate_system(self.config, load_result, minimum_power, baseline, screening, hx_result, pipeline_result)
 
         self.assertGreater(load_result.total_kw, 11_000.0)
@@ -81,6 +83,15 @@ class SmokeTest(unittest.TestCase):
             float(ambient_closure_map["selected"]["ambient_only_closure_distance_km"]),
             self.config["assignment"]["pipeline_distance_m"] / 1000.0,
         )
+        self.assertFalse(zero_warmup_target_search["table"].empty)
+        base_search = zero_warmup_target_search["selected_by_distance"][float(self.config["assignment"]["pipeline_distance_m"])]
+        long_search = zero_warmup_target_search["selected_by_distance"][float(self.config["system_targets"]["long_distance_pipeline_m"])]
+        self.assertIsNone(base_search["warmup_free"])
+        self.assertIsNotNone(base_search["near_best"])
+        self.assertGreater(float(base_search["near_best"]["minimum_supplemental_warmup_kw"]), 0.0)
+        self.assertIsNone(long_search["warmup_free"])
+        self.assertIsNotNone(long_search["near_best"])
+        self.assertGreater(float(long_search["near_best"]["minimum_supplemental_warmup_kw"]), 0.0)
         self.assertGreater(system_eval["annual"]["cost_saving_krw_per_year"], 0.0)
 
     def test_build_deliverables(self) -> None:
