@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+output/
+src/lng_dc_design/__pycache__/
+references/local/*.pdf

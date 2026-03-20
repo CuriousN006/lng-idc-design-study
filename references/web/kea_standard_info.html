@@ -1,0 +1,2356 @@
+
+    
+
+
+
+
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="ko" lang="ko">
+<head>
+	<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+	<meta http-equiv="Content-Script-Type" content="text/javascript" />
+	<meta http-equiv="Content-Style-Type" content="text/css" />
+	<title>EG-TIPS 에너지온실가스 종합정보 플랫폼</title>
+	<link type="text/css" rel="stylesheet" href="../common/css/default.css" />
+	<script  type="text/javascript" src="../common/js/jquery-1.11.2.min.js"></script>	
+	<link type="text/css" rel="stylesheet" href="../common/css/swiper-bundle.min.css" />	
+	<script type="text/javascript" src="../common/js/design.js"></script>
+	<script type="text/javascript" src="../common/js/swiper.min.js"></script>
+	<script type="text/javascript" src="../common/js/jquery.min.js"></script>
+	<script type="text/javascript" src="../common/js/jquery-ui.js"></script>
+	<script type="text/javascript" src="../common/js/jquery-migrate.min.js"></script>
+	<script type="text/javascript" src="../common/js/common.js"></script>
+	<script type="text/javascript" src="/common/js/calendar.js"></script>
+	<script type="text/javascript" src="../common/js/slick.js"></script>
+	<script type="text/javascript" src="../common/js/jquery.bxslider.min.js"></script>
+	<script type="text/javascript" src="../common/js/statistics_banner.js"></script>
+	<script type="text/javascript" src="../common/js/frameLayer.js"></script>
+	<script type="text/javascript" src="/common/js/input_chk.js"></script>		
+	
+	<script type="text/javascript" src="/common/js/highcharts3/highcharts.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/highcharts-more.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/highcharts-3d.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/modules/exporting.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/modules/export-data.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/modules/accessibility.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/modules/annotations.js"></script>
+	<script type="text/javascript" src="/common/js/highcharts3/modules/data.js"></script>
+
+
+	
+	
+	<script type="text/javascript">
+		(function (i, s, o, g, r, a, m) {
+			i['GoogleAnalyticsObject'] = r; i[r] = i[r] || function () {
+				(i[r].q = i[r].q || []).push(arguments)
+			}, i[r].l = 1 * new Date(); a = s.createElement(o),
+		  m = s.getElementsByTagName(o)[0]; a.async = 1; a.src = g; m.parentNode.insertBefore(a, m)
+		})(window, document, 'script', '//www.google-analytics.com/analytics.js', 'ga');
+
+		ga('create', 'UA-70724409-1', 'auto');
+		ga('send', 'pageview');
+	</script>
+<!--[if lt IE 9]>
+<link type="text/css" rel="stylesheet" href="../common/css/ie9.css" />
+<![endif]-->
+</head>
+<body>
+<!-- wrap -->
+<div class="body_wrap">
+	
+	<div class="common_wrap">
+		<!-- header -->
+		 
+
+
+
+
+    
+
+
+
+
+	<script type="text/javascript">
+	function checkForm(form) {
+	
+	window.alert("준비중입니다.");
+	
+	return false;
+	}
+	
+	function open_popup_clcik() {
+			window.open("/statistics/usr_map.do", "MAP", "width=1600px, height=950px, toolbar=no, menubar=no, scrollbars=no, resizable=yes, left=0, top=0");
+	}
+	
+	function toe_popup_clcik() {
+		window.open("/popup/toe.do", "TOE", "width=985px, height=950px, toolbar=no, menubar=no, scrollbars=no, resizable=yes, left=0, top=0");
+	}	
+	
+	$(document).ready(function(){
+		
+		
+
+		
+	});	
+
+	$( document ).ready(function() {	
+
+		/* var filter = "win16|win32|win64|mac|macintel";
+		
+		if ( navigator.platform ) { 
+		
+			if ( filter.indexOf( navigator.platform.toLowerCase() ) < 0 ) { 
+				//mobile 
+				$(".quick_menu_wrap").hide(); 
+				$(".sc_chatbot_area").hide(); 
+				
+			} else { 
+				//pc 
+				$(".quick_menu_wrap").show(); 
+				$(".sc_chatbot_area").show(); 
+			}
+		
+		} */
+		
+	});
+	</script>
+				
+	<!-- quick_menu_wrap -->
+	
+    
+
+
+    	
+	<script>
+	 $( document ).ready(function() {
+		 function popup_getCookie(name) {			
+	         var nameOfCookie = name + "=";
+	         var x = 0;
+	         while (x <= document.cookie.length) {
+	             var y = (x + nameOfCookie.length);
+	             if (document.cookie.substring(x, y) == nameOfCookie) {
+	                 if ((endOfCookie = document.cookie.indexOf(";", y)) == -1)
+	                     endOfCookie = document.cookie.length;
+	                 return unescape(document.cookie.substring(y, endOfCookie));
+	             }
+	             x = document.cookie.indexOf(" ", x) + 1;
+	             if (x == 0)
+	                 break;
+	         }
+	         return "";
+	     }
+		 
+		 if (popup_getCookie("ncookie") != "done") {      
+         	$('.quick_menu .quick_menu_top').removeClass("on");
+			$('.quick_txt_close').show();
+         } else {    
+        	$('.quick_menu .quick_menu_top').addClass("on");
+ 			$('.quick_txt_close').hide();
+     	}
+ });
+
+     function setCookie( name, value, expiredays ) { 
+         var todayDate = new Date();
+	     todayDate.setDate( todayDate.getDate() + expiredays );
+	     document.cookie = name + "=" + escape( value ) + "; path=/; expires=" + todayDate.toGMTString() + ";"
+ }
+
+	</script>
+		<!--quick_menu-->
+		<div class="quick_menu">
+			<div class="quick_menu_top">
+				<p id="popup-cookie" name="popup-cookie"><a class="quick_txt_close"><span>닫기 버튼</span></a>에너지 통계 정보가 궁금하시다면?<br><span class="f_w500">이지(EG)봇</span>에게 물어보세요!</p>
+				<a onclick="window.open('/popup/chatbot_meg.do', '에너지맵', 'width=432px, height=650px, toolbar=no, menubar=no, scrollbars=no, resizable=yes, left=0, top=0'); return false;" class="quick_ico_btn"><img src="../images/common/img_quick.png" alt=""></a>
+			</div>
+			<div class="quick_menu_inner">
+				<a class="quick_open"></a>
+				<ul>
+					<li>
+						<a class="stats_hundred">100대<br>에너지 통계</a>
+					</li>
+					<li>
+						<a onclick="open_popup_clcik(); return false;">에너지맵</a>
+					</li>
+					<li>
+						<a href="/chatbot/chatbot_info.do">이지(EG)봇</a>
+					</li>
+					<li>
+						<a onclick="toe_popup_clcik(); return false;">온실가스<br>계산기</a>
+					</li>
+					<li>
+						<a href="/info/trends_list.do?code=1">동향정보</a>
+					</li>
+					<li>
+						<a href="/kea_stats/kea_stats_list.do">KEA 에너지<br>온실가스 통계</a>
+					</li>
+				</ul>
+			</div>
+		</div>
+		<!--//quick_menu-->
+
+	<!-- // quick_menu_wrap -->
+	<!--header_wraper-->
+	<div class="header_wrap" id="header">		
+		<div class="header_inner fix">				
+				<div class="header_cont">
+					<div class="header_cont_bott">
+						<h1 class="top_logo"><a href="/main/main.do"><span>EG-TIPS 에너지온실가스</span> <em>종합정보 플랫폼</em></a></h1>
+						<div class="gnb">
+							<ul>
+								<li>
+									<a href="/carbon/summary.do">탄소중립</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>										
+											<li><a href="/carbon/summary.do">탄소중립 개요</a></li>
+											<li><a href="/carbon/Ggas_tatistics.do">온실가스 통계</a></li>
+											<li><a href="/carbon/Ggas_industry.do">산업부문 온실가스</a></li>
+											<li><a href="/carbon/Ggas_analysis_model.do">온실가스 분석</a></li>
+											<li><a href="/carbon/carbon_cal.do">탄소중립 시뮬레이터</a></li>
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a class="stats_hundred" href="#">통계정보</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a class="stats_hundred" href="#">100대 에너지통계</a></li>
+											<li><a href="/kea_stats/kea_stats_list.do">KEA 에너지온실가스 통계</a></li>
+											<li><a href="#" onclick="open_popup_clcik(); return false;">에너지맵</a></li>										
+											<li><a href="/chatbot/chatbot_info.do">이지(EG)봇 활용</a></li>		
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a href="/commonsystem/commonsystem_menu.do">기술정보</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a href="../commonsystem/commonsystem_menu.do">설비별</a></li>
+											<li><a href="/overconsector/overconsector_menu.do">업종별</a></li>
+											<li><a href="/savingtech/db_search.do">절감기술 DB</a></li>
+											<li><a href="/mnv/guideinfo.do">M&amp;V 및 우수사례</a></li>
+											<li><a href="/dictionary/dictionary.do">용어사전</a></li>
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a href="/info/trends_list.do?code=1">동향정보</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a href="/info/trends_list.do?code=1">국내동향</a></li>
+											<li><a href="/info/trends_list.do?code=2">해외동향</a></li>
+											<li><a href="/report/report_list.do">통계보고서</a></li>
+											<li><a href="/pds/pds_list.do">KEA 자료실</a></li>
+											<li><a href="/knowledge/press_list.do">정보협력기관 콘텐츠</a></li>
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a href="/egydata/country_pow.do">에너지데이터</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a href="/egydata/country_pow.do">국가 전력소비</a></li>
+											<li><a href="/egydata/renew_egy.do">신재생에너지</a></li>
+											<li><a href="/egydata/workplace_pow.do">에너지다소비사업장 전력소비</a></li>
+											<li><a href="/egydata/contest.do">경진대회</a></li>
+											<li><a href="/egydata/guide.do">분석 가이드</a></li>
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a href="/business_support/consector_info.do">중소기업 지원정보</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a href="/business_support/consector_info.do">중소기업 지원 플랫폼</a></li>
+											<!-- <li><a href="/business_support/market.do">온실가스 감축 마켓</a></li> -->
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a href="/community/community_list.do?searchgubun=01">커뮤니티</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a href="/community/community_list.do?searchgubun=01">토론방</a></li>											
+											<li><a href="/qna/new_qna_list.do">묻고 답하기</a></li>
+											<li><a href="/knowledge/request_list.do">지식나눔</a></li>
+											<li><a href="/community/master_list.do?searchgubun=01">전문가 칼럼</a></li>										
+											<li><a href="/community/job_list.do?searchgubun=01">구인/구직</a></li>
+											<li><a href="/community/forum.do">전자투표</a></li>
+										</ul>
+									</div>
+								</li>
+								<li>
+									<a href="/about/info.do">EG-TIPS</a>
+									<div class="gnb_inner" style="display:none;">
+										<ul>
+											<li><a href="/about/info.do">EG-TIPS 소개</a></li>
+											<li><a href="https://www.energy.or.kr/front/conts/102002001000000.do" target="_blank">KEA 소개</a></li>
+											<li><a href="/notice/notice_list.do">공지사항</a></li>
+											<li><a href="/about/terms.do">서비스정책</a></li>
+											<li><a href="/about/additional_service.do">뉴스레터</a></li>
+										</ul>
+									</div>
+								</li>
+							</ul>
+						</div>
+						<ul class="header_etc_btn">
+							
+							<li class="main_btn_join"><a href="/join/join_01.do"><span>회원가입</span></a></li>
+							<li class="main_btn_login"><a href="/login/login.do"><span>로그인</span></a></li>
+							
+						</ul>						
+					</div>
+					
+				</div>
+				<a href="/about/sitemap.do" class="btn_sitemap"><span>사이트맵</span></a>			
+				<a href="#" class="m_menu_btn"><span>모바일 메뉴 버튼</span></a>
+				<div class="m_gnb">
+					<div class="m_gnb_top">
+						<ul>							
+							
+							<li><a href="/login/login.do">로그인</a></li>
+							<li><a href="/join/join_01.do">회원가입</a></li>
+							
+						</ul>
+						<a class="m_close"><span>모바일 메뉴 닫기</span></a>
+					</div>
+					<ul>
+						<li>
+							<a href="#">탄소중립</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li><a href="/carbon/summary.do">탄소중립 개요</a></li>
+									<li><a href="/carbon/Ggas_tatistics.do">온실가스 통계</a></li>
+									<li><a href="/carbon/Ggas_industry.do">산업부문 온실가스</a></li>
+									<li class="pluse">
+										<a href="#">온실가스 분석</a>
+										<div class="depth3" style="display:none;">
+											 <ul class="">									  	
+												<li><a href="/carbon/Ggas_analysis_model.do">온실가스 분석모형</a></li>
+												<li><a href="/carbon/carbon_cal.do">탄소중립 시뮬레이터</a></li>	
+											  </ul>
+										</div>
+									</li>
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a class="stats_hundred" href="#">통계정보</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li><a class="stats_hundred" href="#">100대 에너지통계</a></li>
+									<li><a href="/kea_stats/kea_stats_list.do">KEA 에너지온실가스 통계</a></li>
+									<li><a href="#" onclick="open_popup_clcik(); return false;">에너지맵</a></li>
+									<li><a href="/chatbot/chatbot_info.do">이지(EG)봇 활용</a></li>
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a href="#">기술정보</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li class="pluse">
+										<a href="#">설비별</a>
+										<div class="depth3" style="display:none;">
+											 <ul class="">
+												<li><a href="../commonsystem/commonsystem_menu.do">소개</a></li>
+											  	<li><a href="../commonsystem/commonsystem_view_02.do?code_num=BS&amp;ch_code_num=BS02">보일러/스팀</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=FS&amp;ch_code_num=FS02">냉동(냉수)</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=CS&amp;ch_code_num=CS02">압축공기</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=HS&amp;ch_code_num=HS02">가열(요로)</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=PS&amp;ch_code_num=PS02">펌핑(펌프/팬)</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=DS&amp;ch_code_num=DS02">건조</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=LS&amp;ch_code_num=LS02">조명</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=OS&amp;ch_code_num=OS02">공조(HVAC)</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=ES&amp;ch_code_num=ES02">클린룸</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=US&amp;ch_code_num=US02">건물</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=SS&amp;ch_code_num=SS02">수변전</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=XS&amp;ch_code_num=XS02">열교환</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=TS&amp;ch_code_num=TS02">열이송</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=AS&amp;ch_code_num=AS02">열저장</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=NS&amp;ch_code_num=NS02">환경설비</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=IS&amp;ch_code_num=IS02">태양광 발전</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=MS&amp;ch_code_num=MS02">친환경자동차 발전</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=WS&amp;ch_code_num=WS02">풍력 발전</a></li>
+												<li><a href="../commonsystem/commonsystem_view_02.do?code_num=GS&amp;ch_code_num=GS02">ESS 발전</a></li>
+											  </ul>
+										</div>
+									</li>
+									<li class="pluse">
+										<a href="#">업종별</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/overconsector/overconsector_menu.do">소개</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MO&amp;ch_code_num=MO01">광업</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MF&amp;ch_code_num=MF01">식품</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=ML&amp;ch_code_num=ML01">섬유</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MW&amp;ch_code_num=MW01">목재</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MJ&amp;ch_code_num=MJ01">제지</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MR&amp;ch_code_num=MR01">정유</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MP&amp;ch_code_num=MP01">석유화학</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MG&amp;ch_code_num=MG01">유리</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MH&amp;ch_code_num=MH01">요업</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MC&amp;ch_code_num=MC01">시멘트</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MI&amp;ch_code_num=MI01">철강</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MN&amp;ch_code_num=MN01">비철금속</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MM&amp;ch_code_num=MM01">기계</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MD&amp;ch_code_num=MD01">반도체</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MK&amp;ch_code_num=MK01">디스플레이</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=ME&amp;ch_code_num=ME01">전기전자</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MT&amp;ch_code_num=MT01">자동차</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MU&amp;ch_code_num=MU01">조선</a></li>
+												<li><a href="../overconsector/overconsector_view_01.do?code_num=MX&amp;ch_code_num=MX01">기타제조</a></li>
+											</ul>
+										</div>
+									</li>
+									<li class="pluse">
+										<a href="#">절감기술 DB</a>
+										<div class="depth3 on" style="display:none;">
+											<ul class="">
+												<li><a href="/savingtech/db_search.do">에너지진단 DB</a></li>
+												<li><a href="/savingtech/dbbestpdf_list.do">기업절감사례 DB</a></li>
+												<li><a href="/comsupport/apparatus_list.do">고효율인증제품 DB</a></li>
+												<li><a href="/savingtech/overseas_list.do">해외감축기술 DB</a></li>
+											</ul>
+										</div>
+									</li>
+									<li class="pluse"><a href="#">M&amp;V 및 우수사례</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/mnv/guideinfo.do">에너지절감산출기준 (M&amp;V)</a></li>
+												<li><a href="/comsupport/reduction_list.do">우수절감기술<br>(M&amp;V 실증사례)</a></li>
+												<li><a href="/purpose/excel.do">경제성평가툴 (Tool)</a></li>
+												<li><a href="http://tips.energy.or.kr/popup/toe.do" target="_blank">탄소계산기 바로가기</a></li>
+											</ul>
+										</div>
+									</li>
+									<li><a href="/dictionary/dictionary.do">용어사전</a></li>
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a href="#">동향정보</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li><a href="/info/trends_list.do?code=1">국내동향</a></li>
+									<li><a href="/info/trends_list.do?code=2">해외동향</a></li>
+									<li><a href="/report/report_list.do">통계보고서</a></li>
+									<li><a href="/pds/pds_list.do">KEA 자료실</a></li>
+									<li><a href="/knowledge/press_list.do">정보협력기관 콘텐츠</a></li>
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a href="#">에너지데이터</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li><a href="/egydata/country_pow.do">국가 전력소비</a></li>
+									<li><a href="/egydata/renew_egy.do">신재생에너지</a></li>
+									<li><a href="/egydata/workplace_pow.do">에너지다소비사업장 전력소비</a></li>
+									<li><a href="/egydata/contest.do">경진대회</a></li>
+									<li><a href="/egydata/guide.do">분석 가이드</a></li>
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a href="#">중소기업 지원정보</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li class="pluse">
+										<a href="#">중소기업 지원 플랫폼</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/business_support/consector_info.do">소개</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MO">광업</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MF">식품</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=ML">섬유</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MW">목재</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MJ">제지</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MR">정유</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MP">석유화학</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MG">유리</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MH">요업</a></li>
+						                  		<li><a href="/business_support/sectors_info.do?code_num=MC">시멘트</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MI">철강</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MN">비철금속</a></li>              		
+												<li><a href="/business_support/sectors_info.do?code_num=MM">기계</a></li>              		
+												<li><a href="/business_support/sectors_info.do?code_num=MD">반도체</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MK">디스플레이</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=ME">전기전자</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MT">자동차</a></li>
+												<li><a href="/business_support/sectors_info.do?code_num=MU">조선</a></li>						
+												<li><a href="/business_support/sectors_info.do?code_num=MX">기타제조</a></li>
+											</ul>
+										</div>
+									</li>
+									<!-- <li class="pluse">
+										<a href="#">온실가스 감축 마켓</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/business_support/market.do">소개</a></li>
+												<li><a href="/business_support/market_guide.do">마켓가이드</a></li>
+												<li><a href="/business_support/market_list.do">감축아이템 조회</a></li>
+											</ul>
+										</div>
+									</li> -->
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a href="#">커뮤니티</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li><a href="/community/community_list.do?searchgubun=01">토론방</a></li>											
+									<li class="pluse">
+										<a href="#">묻고 답하기</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/qna/new_qna_list.do">묻고 답하기</a></li>
+												<li><a href="/qna/old_qna_list.do">(구)정보교류센터</a></li>
+											</ul>
+										</div>
+									</li>
+									<li class="pluse">
+										<a href="#">지식나눔</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/knowledge/request_list.do">지식나눔</a></li>
+												<li><a href="/knowledge/info_list.do?clubid_code=MF">(구)정보교류센터</a></li>
+											</ul>
+										</div>
+									</li>
+									<li><a href="/community/master_list.do?searchgubun=01">전문가 칼럼</a></li>										
+									<li><a href="/community/job_list.do?searchgubun=01">구인/구직</a></li>
+									<li><a href="/community/forum.do">전자투표</a></li>
+								</ul>
+							</div>
+						</li>
+						<li>
+							<a href="#">EG-TIPS</a>
+							<div class="gnb_inner" style="display:none;">
+								<ul>
+									<li><a href="/about/info.do">EG-TIPS 소개</a></li>
+									<li><a href="https://www.energy.or.kr/front/conts/102002001000000.do" target="_blank">KEA 소개</a></li>
+									<li><a href="/notice/notice_list.do">공지사항</a></li>
+									<li class="pluse">
+										<a href="#">서비스 정책</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/about/terms.do">이용약관</a></li>
+												<li><a href="http://www.energy.or.kr/web/kem_home_new/util/protection.asp" target="_blank">개인정보처리방침</a></li>
+												<li><a href="/about/bouncing.do">이메일무단수집거부</a></li>
+												<li><a href="/about/mileage.do">마일리지정책</a></li>
+											</ul>
+										</div>
+									</li>
+									<li class="pluse">
+										<a href="#">뉴스레터</a>
+										<div class="depth3" style="display:none;">
+											<ul class="">
+												<li><a href="/about/additional_service.do">뉴스레터</a></li>
+												<li><a href="/webzine/webzine_request.do">뉴스레터신청</a></li>
+												<li><a href="/webzine/webzine_email.do">뉴스레터수신거부</a></li>
+											</ul>
+										</div>
+									</li>
+								</ul>
+							</div>
+						</li>
+					</ul>
+				</div>			
+			</div>	
+		</div>
+											  
+
+
+    
+
+
+
+
+<!-- 상단 배너 3 20180705 -->
+<!-- <div class="top_banner_wrap_03">
+	<div class="bg_left"></div>
+							  
+						 
+																					 
+	<div class="tb_section fix">
+		 
+					 
+		<div class="left_banner">
+			<a href="javascript:void(0);" class="go_s100_type3"><img src="../images/main/top_banner_01a.jpg" alt="100대 에너지통계 배너" /></a>
+						  
+																	 
+															
+						   
+											  
+							
+																									   
+																										  
+																				  
+			 
+			
+		   
+		</div>
+		<div class="center_banner">
+			<a href="/business_support/consector_info.do" class="go_s100_type1"><img src="../images/main/top_banner_02b.jpg" alt="EG-TIPS 챗봇 배너" /></a>
+		</div>
+		<div class="right_banner">
+			<a href="#" onclick="open_popup_clcik(); return false;" class="go_s100_type2"><img src="../images/main/top_banner_03a.jpg" alt="에너지맵 배너" /></a>
+			<div class="close_area">
+				<input type="checkbox" id="todaycc">
+				<label for="todaycc">오늘하루 열지 않음</label>
+				<a href="#" class="btn_close"><img src="../images/main/close_x.png" alt="닫기" /></a>
+			</div>
+		</div>			
+	</div>
+	<div class="bg_right"></div>
+</div> -->
+<!-- // 상단 배너 3 20180705 -->
+
+<div class="s100_deam"></div>
+													  
+
+<!-- 180703 type 3-->
+<div class="s100_wrap_type3" style="display:none;">
+	
+	<div class="s100_section">
+		
+		<div class="s100_area fix">
+			<div class="tit_area_main fix">
+				<h2>100대 에너지 통계</h2>
+				<div class="top_close_area">
+					<a href="#" class="s100_close"><img src="../images/main/s100_close_main.png" alt="레이어 닫기" /></a>
+				</div>
+			</div>		
+			
+			<ol class="s100_cont_area fix">
+				<li class="line_01">
+					<ol>
+						<!-- 1. 국가 에너지 계획 -->
+						<li class="s100_conts s100_01 type1">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>국가 에너지 계획</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100 type2">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0101.do">에너지 기본계획('40년 최종에너지 기준전망/목표수요)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">01</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0101.do">211.0/171.8백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">01</span><strong>에너지 기본계획('40년 최종에너지 기준전망/목표수요)</strong><span class="index">211.0/171.8백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0102.do">에너지이용합리화 기본계획('24년 최종에너지 기준수요/목표수요)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">02</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0102.do">194.7/176.5백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">02</span><strong style="font-size:13px;">에너지이용합리화 기본계획('24년 최종에너지 기준수요/목표수요)</strong><span class="index" style="font-size:12px;">194.7/176.5백만toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0103.do">전력수급 기본계획('38년 전력소비량 기준수요/목표수요)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">03</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0103.do">735.1/624.5TWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">03</span><strong>전력수급 기본계획('38년 전력소비량 기준수요/목표수요)</strong><span class="index">735.1/624.5TWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0104.do">천연가스 수급계획('36년 천연가스 수요전망, 수급관리수요 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">04</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0104.do">4,580만톤</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">04</span><strong>천연가스 수급계획('36년 천연가스 수요전망, 수급관리수요 기준)</strong><span class="index">4,580만톤</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0105.do">신재생에너지 기본계획('34년 최종에너지 대비 보급목표)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">05</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0105.do">23.5백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">05</span><strong>신재생에너지 기본계획('34년 최종에너지 대비 보급목표)</strong><span class="index">23.5백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0106.do">재생에너지 3020 이행계획('30년 재생에너지 발전량 비중)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">06</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0106.do">20%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">06</span><strong>재생에너지 3020 이행계획('30년 재생에너지 발전량 비중)</strong><span class="index">20%</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0107.do">집단에너지 공급 기본계획('28년 지역난방 보급 세대수)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">07</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0107.do">4,463천호</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">07</span><strong>집단에너지 공급 기본계획('28년 지역난방 보급 세대수)</strong><span class="index">4,463천호</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0108.do">2030 국가 온실가스 감축목표(NDC) 상향안('18년 배출량 대비 감축률)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">08</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0108.do">40%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">08</span><strong>2030 국가 온실가스 감축목표(NDC) 상향안('18년 배출량 대비 감축률)</strong><span class="index">40%</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0109.do">2050 탄소중립 기본계획('50년 국내 온실가스 배출량 A안/B안)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">09</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0109.do">80.4/117.3백만톤CO<sub>2</sub>eq</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">09</span><strong>2050 탄소중립 기본계획('50년 국내 온실가스 배출량 A안/B안)</strong><span class="index">80.4/117.3백만톤CO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 국가 에너지 계획 -->
+
+						<!--  2. 에너지 통계 -->
+						<li class="s100_conts s100_02 type2">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>에너지 통계</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0201.do">1차에너지 공급량 ('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">10</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0201.do">303.0백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">10</span><strong>1차에너지 공급량 ('24년 기준)</strong><span class="index">303.0백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0202.do"><span class="sg_indent">1차에너지 공급량 [에너지원별 (석유, '24년 기준)]</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">11</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0202.do">113.9백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">11</span><strong>1차에너지 공급량 [에너지원별 (석유, '24년 기준)]</strong><span class="index">113.9백만toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0203.do"><span class="sg_indent">1차에너지 공급량 [지역별 (충남, '23년 기준)]</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">12</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0203.do">58.2백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">12</span><strong>1차에너지 공급량 [지역별 (충남, '23년 기준)]</strong><span class="index">58.2백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0204.do">최종에너지 소비량 ('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">13</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0204.do">212.1백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">13</span><strong>최종에너지 소비량 ('24년 기준)</strong><span class="index">212.1백만toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0205.do"><span class="sg_indent">최종에너지 소비량 [에너지원별 (석유, '24년 기준)]</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">14</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0205.do">99.7백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">14</span><strong>최종에너지 소비량 [에너지원별 (석유, '24년 기준)]</strong><span class="index">99.7백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0206.do"><span class="sg_indent">최종에너지 소비량 [부문별 (산업, '24년 기준)]</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">15</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0206.do">130.9백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">15</span><strong>최종에너지 소비량 [부문별 (산업, '24년 기준)]</strong><span class="index">130.9백만toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0207.do"><span class="sg_indent">최종에너지 소비량 [지역별 (전남, '23년 기준)]</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">16</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0207.do">41.0백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">16</span><strong>최종에너지 소비량 [지역별 (전남, '23년 기준)]</strong><span class="index">41.0백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0208.do">1인당 1차 에너지 소비량 ('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">17</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0208.do">5.75toe/인</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">17</span><strong>1인당 1차 에너지 소비량 ('23년 기준)</strong><span class="index">5.75toe/인</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0209.do">에너지 총 수입액 ('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">18</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0209.do">1,613억$</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">18</span><strong>에너지 총 수입액 ('24년 기준)</strong><span class="index">1,613억$</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0210.do">에너지 수입의존도 ('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">19</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0210.do">93.7%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">19</span><strong>에너지 수입의존도 ('24년 기준)</strong><span class="index">93.7%</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0211.do">석유 의존도 ('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">20</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0211.do">37.6%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">20</span><strong>석유 의존도 ('24년 기준)</strong><span class="index">37.6%</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 에너지 통계 -->
+
+						<!-- 3. 전력 통계 -->
+						<li class="s100_conts s100_03 type3">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>전력 통계</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0301.do">설비용량('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">21</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0301.do">149,179MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">21</span><strong>설비용량('24년 기준)</strong><span class="index">149,179MW</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0302.do">공급능력('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num bg_03">22</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0302.do">105,360MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">22</span><strong>공급능력('24년 기준)</strong><span class="index">105,360MW</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0303.do">최대전력('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">23</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0303.do">97,115MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">23</span><strong>최대전력('24년 기준)</strong><span class="index">97,115MW</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0304.do">평균전력('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">24</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0304.do">67,805MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">24</span><strong>평균전력('24년 기준)</strong><span class="index">67,805MW</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0305.do">설비예비력('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">25</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0305.do">52,064MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">25</span><strong>설비예비력('24년 기준)</strong><span class="index">52,064MW</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0306.do">공급예비력('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">26</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0306.do">8,245MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">26</span><strong>공급예비력('24년 기준)</strong><span class="index">8,245MW</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0307.do">연간 발전량('24 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">27</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0307.do">595,601GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">27</span><strong>연간 발전량('24년 기준)</strong><span class="index">595,601GWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0308.do"><span class="sg_indentGrn">발전원별 발전량(기력, '24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">28</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0308.do">171,970GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">28</span><strong>발전원별 발전량(기력, '24년 기준)</strong><span class="index">171,970GWh</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0309_01.do">연간 거래량('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">29</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0309_01.do">550,266GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">29</span><strong>연간 거래량('24년 기준)</strong><span class="index">550,266GWh</span></p>
+										</div>
+									</li>									
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0309_02.do"><span class="sg_indentGrn">발전원별 거래량(석탄, '24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">30</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0309_02.do">161,391GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">30</span><strong>발전원별 거래량(석탄, '24년 기준)</strong><span class="index">161,391GWh</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0310.do">연간 판매량('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">31</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0310.do">549,821GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">31</span><strong>연간 판매량('24년 기준)</strong><span class="index">549,821GWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0311.do"><span class="sg_indentGrn">계약종별(산업용, '24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">32</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0311.do">286,212GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">32</span><strong>계약종별(산업용, '24년 기준)</strong><span class="index">286,212GWh</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0312.do"><span class="sg_indentGrn">용도별(제조업, '24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">33</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0312.do">256,532GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">33</span><strong>용도별(제조업, '24년 기준)</strong><span class="index">256,532GWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0313.do"><span class="sg_indentGrn">행정구역별(경기, '24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">34</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0313.do">143,302GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">34</span><strong>행정구역별(경기, '24년 기준)</strong><span class="index">143,302GWh</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0314.do">전력시장 참여회원('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">35</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0314.do">6,665회원</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">35</span><strong>전력시장 참여회원('24년 기준)</strong><span class="index">6,665회원</span></p>
+										</div>
+									</li>									
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 전력 통계 -->
+					</ol>
+				</li>
+
+				<li class="line_02">
+					<ol>
+						<!-- 4. 신재생 통계 -->
+						<li class="s100_conts s100_04 type2">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>신재생 통계</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0401.do">신재생에너지 생산량('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">36</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0401.do">17.1백만toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">36</span><strong>신재생에너지 생산량('23년 기준)</strong><span class="index">17.1백만toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0402.do">1차에너지 대비 공급비중('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">37</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0402.do">5.73%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">37</span><strong>1차에너지 대비 공급비중('23년 기준)</strong><span class="index">5.73%</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0403.do">신재생에너지 발전량('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">38</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0403.do">60,400GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">38</span><strong>신재생에너지 발전량('23년 기준)</strong><span class="index">60,400GWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0404.do">총발전량 대비 공급비중('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">39</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0404.do">9.67%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">39</span><strong>총발전량 대비 공급비중('23년 기준)</strong><span class="index">9.67%</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0405.do">신재생에너지 보급용량(발전, '23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">40</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0405.do">4,173MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">40</span><strong>신재생에너지 보급용량(발전, '23년 기준)</strong><span class="index">4,173MW</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0406.do">신재생에너지 누적 보급용량(발전, '23년 누적 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">41</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0406.do">37,370MW</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">41</span><strong>신재생에너지 누적 보급용량(발전, '23년 누적 기준)</strong><span class="index">37,370MW</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0407.do">신재생에너지 보급용량(발전외, '23년 태양열 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">42</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0407.do">28,575m<sup>2</sup></a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">42</span><strong>신재생에너지 보급용량(발전외, '23년 태양열 기준)</strong><span class="index">28,575m<sup>2</sup></span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0408.do">신재생에너지 누적 보급용량(발전외, '23년 태양열 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">43</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0408.do">680,279m<sup>2</sup></a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">43</span><strong>신재생에너지 누적 보급용량(발전외, '23년 태양열 기준)</strong><span class="index">680,279m<sup>2</sup></span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0411.do">신재생에너지 전력거래량('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">44</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0411.do">38,060GWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">44</span><strong>신재생에너지 전력거래량('24년 기준)</strong><span class="index">38,060GWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0409.do">신재생에너지 산업 기업체수('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">45</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0409.do">507개</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">45</span><strong>신재생에너지 산업 기업체수('23년 기준)</strong><span class="index">507개</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0410.do">신재생에너지 산업 고용인원('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">46</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0410.do">11,002명</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">46</span><strong>신재생에너지 산업 고용인원('23년 기준)</strong><span class="index">11,002명</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0412.do">신재생에너지 매출액('23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">47</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0412.do">137,993억원</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">47</span><strong>신재생에너지 매출액('23년 기준)</strong><span class="index">137,993억원</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 신재생 통계 -->
+
+						<!-- 5. 기타 에너지 통계 -->
+						<li class="s100_conts s100_05 type3">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>기타 에너지 통계</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0501.do">천연가스 판매현황('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">48</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0501.do">34,190천톤</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">48</span><strong>천연가스 판매현황('24년 기준)</strong><span class="index">34,190천톤</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0502.do"><span class="sg_indentPupl">도시가스용('24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">49</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0502.do">18,463천톤</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">49</span><strong>도시가스용('24년 기준)</strong><span class="index">18,463천톤</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0503.do"><span class="sg_indentPupl">발전용('24년 기준)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">50</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0503.do">15,727천톤</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">50</span><strong>발전용('24년 기준)</strong><span class="index">15,727천톤</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0504.do">집단에너지 설치용량('23년 열기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">51</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0504.do">40,845Gcal/h</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">51</span><strong>집단에너지 설치용량('23년 열기준)</strong><span class="index">40,845Gcal/h</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0505.do">집단에너지 생산량('23년 열기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">52</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0505.do">124,107,159Gcal</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">52</span><strong>집단에너지 생산량('23년 열기준)</strong><span class="index">124,107,159Gcal</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 기타 에너지 통계 -->
+
+						<!-- 6. 온실가스 통계 -->
+						<li class="s100_conts s100_06 type2">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>온실가스 통계</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0601.do">온실가스 총 배출량('22년 기준, '06지침 적용)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">53</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0601.do">686.5백만tCO<sub>2</sub>eq</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">53</span><strong>온실가스 총 배출량('22년 기준, '06지침 적용)</strong><span class="index">686.5백만tCO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0602.do"><span class="sg_indentRed">분야별(에너지 기준, '22년 기준, '06지침 적용)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">54</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0602.do">551.9백만tCO<sub>2</sub>eq</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">54</span><strong>분야별(에너지 기준, '22년 기준, '06지침 적용)</strong><span class="index">551.9백만tCO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0603.do"><span class="sg_indentRed">온실가스별(CO<sub>2</sub> 기준, '22년 기준, '06지침 적용)</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">55</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0603.do">635.8백만tCO<sub>2</sub>eq</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">55</span><strong>온실가스별(CO<sub>2</sub> 기준, '22년 기준, '06지침 적용)</strong><span class="index">635.8백만tCO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0604.do">에너지분야 CO<sub>2</sub> 배출량('22년 기준, '06지침 적용)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">56</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0604.do">256.2백만tCO<sub>2</sub>eq </a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">56</span><strong>에너지분야 CO<sub>2</sub> 배출량('22년 기준, '06지침 적용)</strong><span class="index">256.2백만tCO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0605.do">산업공정 온실가스 배출량('22년 기준, '06지침 적용)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">57</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0605.do">131.3백만tCO<sub>2</sub>eq </a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">57</span><strong>산업공정 온실가스 배출량('22년 기준, '06지침 적용)</strong><span class="index">131.3백만tCO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 온실가스 통계 -->
+
+						<!-- 7. 에너지 가격 -->
+						<li class="s100_conts s100_07 type3">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>에너지 가격</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0701.do">석유 판매가격(휘발유 기준, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">58</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0701.do">1,646.7원/ℓ</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">58</span><strong>석유 판매가격(휘발유 기준, '24년 기준)</strong><span class="index">1,646.7원/ℓ</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0702.do">석유 판매가격(경유 기준, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">59</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0702.do">1,502.7원/ℓ</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">59</span><strong>석유 판매가격(경유 기준, '24년 기준)</strong><span class="index">1,502.7원/ℓ</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0703.do">전력 판매가격(평균 기준, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">60</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0703.do">162.92원/kWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">60</span><strong>전력 판매가격(평균 기준, '24년 기준)</strong><span class="index">162.92원/kWh</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0704.do">도시가스 판매가격(업무용 기준, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">61</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0704.do">23.6원/MJ</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">61</span><strong>도시가스 판매가격(업무용 기준, '24년 기준)</strong><span class="index">23.6원/MJ</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0705.do">계통한계가격[SMP]('24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">62</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0705.do">128.39원/kWh</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">62</span><strong>계통한계가격[SMP]('24년 기준)</strong><span class="index">128.39원/kWh</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 에너지 가격 -->
+
+						<!-- 8. 글로벌 에너지 현황 -->
+						<li class="s100_conts s100_08 type2 mgb0">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>글로벌 에너지 현황</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0801.do">세계 에너지 생산량('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">63</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0801.do">14,673Mtoe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">63</span><strong>세계 에너지 생산량('21년 기준)</strong><span class="index">14,673Mtoe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0802.do"><span class="sg_indentGrn">세계 석유 생산량</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">64</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0802.do">4,284Mtoe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">64</span><strong>세계 석유 생산량</strong><span class="index">4,284Mtoe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0803.do"><span class="sg_indentGrn">세계 천연가스 생산량</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">65</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0803.do">3,495Mtoe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">65</span><strong>세계 천연가스 생산량</strong><span class="index">3,495Mtoe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0804.do"><span class="sg_indentGrn">세계 석탄 생산량</span></a></dt>
+											<dd class="dd01"><span class="s100_list_num">66</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0804.do">4,007Mtoe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">66</span><strong>세계 석탄 생산량</strong><span class="index">4,007Mtoe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0805.do">세계 1차 에너지공급량</a></dt>
+											<dd class="dd01"><span class="s100_list_num">67</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0805.do">14,759Mtoe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">67</span><strong>세계 1차 에너지공급량</strong><span class="index">14,759Mtoe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0806.do">세계 1차 에너지 수요 전망 (2030년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">68</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0806.do">668EJ</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">68</span><strong>세계 1차 에너지 수요 전망 (2030년 기준)</strong><span class="index">668EJ</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0807.do">세계 최종 에너지소비량 (2021년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">69</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0807.do">10,082Mtoe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">69</span><strong>세계 최종 에너지소비량 (2021년 기준)</strong><span class="index">10,082Mtoe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0808.do">세계 최종에너지 수요 전망 (2030년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">70</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0808.do">482EJ</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">70</span><strong>세계 최종에너지 수요 전망 (2030년 기준)</strong><span class="index">482EJ</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0809.do">세계 CO<sub>2</sub> 배출량</a></dt>
+											<dd class="dd01"><span class="s100_list_num">71</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0809.do">33,572MtCO<sub>2</sub></a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">71</span><strong>세계 CO<sub>2</sub> 배출량</strong><span class="index">33,572MtCO<sub>2</sub></span></p>
+										</div>
+									</li>									
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0810.do">세계 CO<sub>2</sub> 배출 전망 (2040년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">72</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0810.do">31,657MtCO<sub>2</sub></a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">72</span><strong>세계 CO<sub>2</sub> 배출 전망 (2040년 기준)</strong><span class="index">31,657MtCO<sub>2</sub></span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 글로벌 에너지 현황 -->
+					</ol>
+				</li>
+
+				<li class="line_03">
+					<ol>						
+						<!-- 9. 글로벌 에너지 순위 및 국제 비교 -->
+						<li class="s100_conts s100_09 type3">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>글로벌 에너지 순위 및 국제 비교</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0901.do">1차에너지 공급 순위('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">73</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0901.do">8위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">73</span><strong>1차에너지 공급 순위('21년 기준)</strong><span class="index">8위</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0902.do">석유소비량 순위('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">74</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0902.do">7위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">74</span><strong>석유소비량 순위('21년 기준)</strong><span class="index">7위</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0903.do">전력소비량 순위('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">75</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0903.do">6위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">75</span><strong>전력소비량 순위('21년 기준)</strong><span class="index">6위</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0909.do">온실가스 배출 순위('20년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">76</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0909.do">8위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">76</span><strong>온실가스 배출 순위('20년 기준)</strong><span class="index">8위</span></p>
+										</div>
+									</li>									
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0904.do">CO<sub>2</sub> 배출 순위('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">77</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0904.do">8위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">77</span><strong>CO<sub>2</sub> 배출 순위('21년 기준)</strong><span class="index">8위</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0905.do">1인당 에너지소비량 순위('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">78</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0905.do">17위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">78</span><strong>1인당 에너지소비량 순위('21년 기준)</strong><span class="index">17위</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0906.do">1인당 전력소비량 순위('21년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">79</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0906.do">14위</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">79</span><strong>1인당 전력소비량 순위('21년 기준)</strong><span class="index">14위</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view0907.do">에너지원단위(부가가치 기준, '22년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">80</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0907.do">0.165</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">80</span><strong>에너지원단위(부가가치 기준, '22년 기준)</strong><span class="index">0.165</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view0908.do">에너지원단위 (PPP, 22년  기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">81</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view0908.do">0.125</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">81</span><strong>에너지원단위 (PPP, 22년  기준)</strong><span class="index">0.125</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 글로벌 에너지 순위 및 국제 비교 -->
+
+						<!-- 10. 주요 경제지표 -->
+						<li class="s100_conts s100_10 type3">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>주요 경제지표</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1001.do">국내총생산 (GDP, 명목, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">82</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1001.do">2,556,857십억원</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">82</span><strong>국내총생산 (GDP, 명목, '24년 기준)</strong><span class="index">2,556,857십억원</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1002.do">원/달러 환율 (매매기준율, '25년 6월 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">83</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1002.do">1,366.95원</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">83</span><strong>원/달러 환율 (매매기준율, '25년 6월 기준)</strong><span class="index">1,366.95원</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1003.do">콜금리 ('25년 6월 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">84</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1003.do">연 2.52%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">84</span><strong>콜금리 ('25년 6월 기준)</strong><span class="index">연 2.52%</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1004.do">1인당 국민총소득(GNI, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">85</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1004.do">36,745달러</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">85</span><strong>1인당 국민총소득(GNI, '24년 기준)</strong><span class="index">36,745달러</span></p>
+										</div>
+									</li>
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // 주요 경제지표 -->
+						
+						<!-- 11. KEA 주요사업 -->
+						<li class="s100_conts s100_11 type3">
+							<!-- tit area -->
+							<div class="tit_area fix">
+								<h5>KEA 주요사업</h5>
+							</div>
+							<!-- // tit area -->
+							<!-- cont -->
+							<div class="listStyle_s100">
+								<ol>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1101.do">산업발전부문 온실가스에너지 목표관리제(목표설정, '23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">86</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1101.do">16,380천tCO<sub>2</sub>-eq</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">86</span><strong>산업발전부문 온실가스에너지 목표관리제(목표설정, '23년 기준)</strong><span class="index">16,380천tCO<sub>2</sub>-eq</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1102.do">에너지절약시설 투자 자금지원 및 세제지원 제도(절감량, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">87</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1102.do">220천toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">87</span><strong>에너지절약시설 투자 자금지원 및 세제지원 제도(절감량, '24년 기준)</strong><span class="index">220천toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1103.do">에너지절약전문기업(ESCO) 사업지원 및 육성(절감량, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">88</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1103.do">101천toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">88</span><strong>에너지절약전문기업(ESCO) 사업지원 및 육성(절감량, '24년 기준)</strong><span class="index">101천toe</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1104.do">집단에너지사업(산업단지 운영 사업자 수, '23년 말 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">89</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1104.do">39개</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">89</span><strong>집단에너지사업(산업단지 운영 사업자 수, '23년 말 기준)</strong><span class="index">39개</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1105.do">건축물 온실가스에너지 목표관리제도(배출량, '23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">90</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1105.do">1,594천tCO<sub>2</sub>-eq</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">90</span><strong>건축물 온실가스에너지 목표관리제도(배출량, '23년 기준)</strong><span class="index">1,594천tCO<sub>2</sub>-eq</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1106.do">건축물 에너지효율등급인증제도(절감량,  '23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">91</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1106.do">1,744천toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">91</span><strong>건축물 에너지효율등급인증제도(절감량,  '23년 기준)</strong><span class="index">1,744천toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1107.do">자동차 에너지소비효율등급 표시제도(등록 수, '24년 12월 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">92</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1107.do">3,741모델</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">92</span><strong>자동차 에너지소비효율등급 표시제도(등록 수, '24년 12월 기준)</strong><span class="index">3,741모델</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1108.do">에너지소비 효율등급 표시제도(등록 모델수, '24년 12월 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">93</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1108.do">141,301개</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">93</span><strong>에너지소비 효율등급 표시제도(등록 모델수, '24년 12월 기준)</strong><span class="index">141,301개</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1109.do">고효율에너지기자재 인증제도(유효 모델수, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">94</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1109.do">73,732개</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">94</span><strong>고효율에너지기자재 인증제도(유효 모델수, '24년 기준)</strong><span class="index">73,732개</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1110.do">신재생에너지 공급의무화제도(이행률, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">95</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1110.do">93.80%</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">95</span><strong>신재생에너지 공급의무화제도(이행률, '24년 기준)</strong><span class="index">93.80%</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1111.do">신재생에너지 주택지원사업(주택수, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">96</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1111.do">15,403호</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">96</span><strong>신재생에너지 주택지원사업(주택수, '24년 기준)</strong><span class="index">15,403호</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1112.do">신재생에너지 금융지원 및 민간협약보증 사업(보급량, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">97</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1112.do">169,741toe</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">97</span><strong>신재생에너지 금융지원 및 민간협약보증 사업(보급량, '24년 기준)</strong><span class="index">169,741toe</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1113.do">에너지사용량 신고제도(업체수, '23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">98</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1113.do">5,128개</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">98</span><strong>에너지사용량 신고제도(업체수, '23년 기준)</strong><span class="index">5,128개</span></p>
+										</div>
+									</li>
+									<li class="hasBg">
+										<dl>
+											<dt><a href="/statistics/statistics_view1115.do">산업부문 온실가스 배출량 조사(온실가스배출량, '23년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">99</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1115.do">348,854천tCO<sub>2</sub>eq</a></dd>
+										</dl>								
+										<div class="detail_box">
+											<p><span class="number">99</span><strong>산업부문 온실가스 배출량 조사(온실가스배출량, '23년 기준)</strong><span class="index">348,854천tCO<sub>2</sub>eq</span></p>
+										</div>
+									</li>
+									<li>
+										<dl>
+											<dt><a href="/statistics/statistics_view1114.do">에너지바우처사업(신청현황, '24년 기준)</a></dt>
+											<dd class="dd01"><span class="s100_list_num">100</span></dd>
+											<dd class="dd02"><a href="/statistics/statistics_view1114.do">125.8만 가구</a></dd>
+										</dl>
+										<div class="detail_box">
+											<p><span class="number">100</span><strong>에너지바우처사업(신청현황, '24년 기준)</strong><span class="index">125.8만 가구</span></p>
+										</div>
+									</li>									
+								</ol>
+							</div>
+							<!-- // cont -->
+						</li>
+						<!-- // KEA 주요사업 -->
+						
+                        <!-- 12. KEA 에너지온실가스 통계 -->
+                        <li class="s100_conts type3 sty02">
+                            <!-- tit area -->
+                            <div class="tit_area fix">
+                                <a href="/kea_stats/kea_stats_list.do">KEA 에너지온실가스 통계</a>
+                            </div>
+                            <!-- // tit area -->
+                            <!-- cont -->
+                            <div class="listStyle_s100">
+                               <ul class="s100_new_type">
+                                   <li><p>에너지사용량통계</p></li>
+                                   <li><p>국가 온실가스 인벤토리</p></li>
+                                   <li><p>산업부문 에너지사용 및 온실가스 배출량 통계</p></li>
+                                   <li><p>에너지 총 조사</p></li>
+                                   <li><p>신·재생에너지 보급 및 산업 통계</p></li>
+                               </ul>
+                            </div>
+                            <!-- // cont -->
+                        </li>	
+                        <!-- KEA 에너지온실가스 통계 -->							
+					</ol>
+				</li>
+			</ol>
+		
+		</div>
+		
+	</div>
+		
+	
+</div>
+<!-- // 180703 type 3 -->
+		
+		<!--// header -->
+	
+		<!-- container -->
+		
+
+
+
+
+
+	
+	
+	<div class="lnb_wrap">
+		<div class="lnb_inner fix">
+			<a href="#" class="lnb_home"><span>메인으로 이동</span></a>
+			<ul class="lnb_dep01 fix">
+				<li>
+					<a href="#"><span>기술정보</span></a>
+					<ul class="lnb_dep02" style="display: none;">
+						<li><a href="/carbon/summary.do"><span>탄소중립</span></a></li>
+						<li><a href="#" class="stats_hundred"><span>통계정보</span></a></li>
+						<li><a href="/commonsystem/commonsystem_menu.do"><span>기술정보</span></a></li>
+						<li><a href="/info/trends_list.do?code=1"><span>동향정보</span></a></li>
+						<li><a href="/egydata/country_pow.do"><span>에너지데이터</span></a></li>
+						<li><a href="/business_support/consector_info.do"><span>중소기업 지원정보</span></a></li>
+						<li><a href="/community/community_list.do?searchgubun=01"><span>커뮤니티</span></a></li>
+						<li><a href="/about/info.do"><span>EG-TIPS</span></a></li>
+					</ul>
+				</li>
+				<li>
+					<a href="#" class=""><span>M&amp;V 및 우수사례</span></a>
+					<ul class="lnb_dep02" style="display: none;">							
+						<li><a href="/commonsystem/commonsystem_menu.do">설비별</a></li>
+						<li><a href="/overconsector/overconsector_menu.do">업종별</a></li>
+						<li><a href="/savingtech/db_search.do">절감기술DB</a></li>
+						<li class="on"><a href="/mnv/guideinfo.do">M&amp;V 및 우수사례</a></li>
+						<li><a href="/dictionary/dictionary.do">용어사전</a></li>
+					</ul>
+				</li>
+				<li>
+					<a href="#" class=""><span>경제성평가툴(Tool)</span></a>
+					<ul class="lnb_dep02" style="display: none;">
+						<li><a href="/mnv/guideinfo.do">에너지절감산출기준 (M&amp;V)</a></li>
+						<li><a href="/comsupport/reduction_list.do">우수절감기술 (M&amp;V 실증사례)</a></li>
+						<li class="on"><a href="/purpose/excel.do">경제성평가툴 (Tool)</a></li>
+						<li><a href="#" onclick="toe_popup_clcik(); return false;">탄소계산기 바로가기</a></li>
+					</ul>
+				</li>
+				<li>
+					<a href="#" class=""><span>기준정보</span></a>
+					<ul class="lnb_dep02" style="display: none;">
+						<li><a href="/purpose/excel.do">간이평가툴(엑셀)</a></li>
+						<li><a href="/purpose/list.do">상세평가툴(TRNSYS)</a></li>
+						<li class="on"><a href="/purpose/standard_info.do">기준정보</a></li>												
+					</ul>
+				</li>
+			</ul>
+		</div>
+	</div>
+	<!-- mobile_sub_tit -->
+	<div class="mobile_sub_tit fix">
+		<a href="#" class="btn_prev"><span>이전으로</span></a>
+		<h3 class="m_sub_tit">경제성평가툴(Tool)</h3>
+	</div>
+	<!-- //mobile_sub_tit -->
+	<div class="sub_wrap">
+			
+			<!--sub_cont_wrap-->
+			<div class="sub_cont_wrap" id="content">
+				<div class="sub_cont_inner">
+					<div class="in_w">
+						<h3 class="sub_tit_h3">경제성평가툴(Tool)</h3>
+						<ul class=" tab_sty01 sty03 fix">
+							<li><a href="/purpose/excel.do">간이평가툴 (엑셀)</a></li>
+							<li><a href="/purpose/list.do">상세평가툴 (TRNSYS)</a></li>
+							<li class="on"><a href="/purpose/standard_info.do">기준정보</a></li>
+						</ul>
+						<div class="select_tab">
+							<select name="" id="" onchange="window.open(value,'_self');">
+								<option value="/purpose/excel.do">간이평가툴(엑셀)</option>
+								<option value="/purpose/list.do">상세평가툴(TRNSYS)</option>
+								<option value="" selected="selected">기준정보</option>														
+							</select>
+						</div>
+						<h4 class="sub_tit_blue">개요</h4>
+						<div class="noti_cont">
+							<p>
+								에너지절감 프로젝트의 사업성 평가 관련 연료별 기준 1)순발열량, 2)석유환산계수, 3)이산화탄소 배출계수 및 4)에너지단가등의 기준정보를 수록하였다.<br>
+								기준 정보는 출처와 최근 업데이트된 일자와 업데이트 주기를 명시하여 에너지절감 프로젝트 평가 결과의 신뢰성을 높이도록 하였다.<br>
+								연료별 기준정보의 업데이터 주기는 월별, 전력 정보는 매년 상반기/하반기로 구분하여 관리자가 업데이트 한다.
+							</p>
+						</div>
+
+						<h4 class="sub_tit_blue02">에너지절감 프로젝트 기준 정보</h4>
+						<div class="table_sty01 non_hover mt0 scroll_940 m_scroll on">
+							<table>
+								<caption>에너지절감 프로젝트 기준 정보표</caption>
+								<colgroup>
+									<col width="5%">
+									<col width="15%">
+									<col width="10%">
+									<col width="10%">
+									<col width="10%">
+									<col width="10%">
+									<col width="10%">
+									<col width="10%">
+									<col width="10%">
+									<col width="10%">
+								</colgroup>									
+								<thead>
+								  <tr>
+									<th rowspan="2" class="bdrh1">번호</th>
+									<th rowspan="2" class="bdrh1">연료명</th>
+									<th colspan="2" class="bdrh1">연료별 순발열량1)</th>
+									<th colspan="2" class="bdrh1">연료별 석유환산계수2)</th>
+									<th colspan="2" class="bdrh1">연료별 CO2 배출계수3)</th>
+									<th colspan="2">연료별 단가4)</th>
+								  </tr>
+								  <tr>
+									<th><span>값</span></th>
+									<th class="bdrh1">단위</th>
+									<th><span>값</span></th>
+									<th class="bdrh1">단위</th>
+									<th><span>값</span></th>
+									<th class="bdrh1">단위</th>
+									<th><span>값</span></th>
+									<th><span>단위</span></th>
+								  </tr>
+								</thead>
+								<tbody>
+								  <tr>
+									<td class="bdr1">1</td>
+									<td>휘발유</td>
+									<td>7,230</td>
+									<td>kcal/ℓ</td>
+									<td>0.723</td>
+									<td>toe/천ℓ</td>
+									<td>2.076</td>
+									<td>tCO2/toe</td>
+									<td>1,501.22</td>
+									<td>원/ℓ</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">2</td>
+									<td>보일러등유</td>
+									<td>8,200</td>
+									<td>kcal/ℓ</td>
+									<td>0.820</td>
+									<td>toe/천ℓ</td>
+									<td>2.441</td>
+									<td>tCO2/toe</td>
+									<td>1,366.70</td>
+									<td>원/ℓ</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">3</td>
+									<td>경유</td>
+									<td>8,420</td>
+									<td>kcal/ℓ</td>
+									<td>0.842</td>
+									<td>toe/천ℓ</td>
+									<td>2.584</td>
+									<td>tCO2/toe</td>
+									<td>1,253.45</td>
+									<td>원/ℓ</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">4</td>
+									<td>B-C유</td>
+									<td>9,360</td>
+									<td>kcal/ℓ</td>
+									<td>0.936</td>
+									<td>toe/천ℓ</td>
+									<td>3.003</td>
+									<td>tCO2/toe</td>
+									<td>762.40</td>
+									<td>원/ℓ</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">5</td>
+									<td>LPG</td>
+									<td>13,780</td>
+									<td>kcal/Nm3</td>
+									<td>1.378</td>
+									<td>toe/천Nm3</td>
+									<td>3.603</td>
+									<td>tCO2/toe</td>
+									<td>764.44</td>
+									<td>원/Nm3</td>
+								  </tr>
+								  <tr>
+									<td rowspan="6" class="bdr1">6</td>
+									<td colspan="9">LNG</td>
+								  </tr>
+								  <tr>
+									<td>주택용</td>
+									<td>9,420</td>
+									<td>kcal/Nm³</td>
+									<td>0.942</td>
+									<td>toe/천Nm3</td>
+									<td>2.200</td>
+									<td>tCO2/toe</td>
+									<td>785.43</td>
+									<td>원/Nm3</td>
+								  </tr>
+								  <tr>
+									<td>업무용</td>
+									<td>9,420</td>
+									<td>kcal/Nm³</td>
+									<td>0.942</td>
+									<td>toe/천Nm3</td>
+									<td>2.200</td>
+									<td>tCO2/toe</td>
+									<td>781.54</td>
+									<td>원/Nm3</td>
+								  </tr>
+								  <tr>
+									<td>일반용</td>
+									<td>9,420</td>
+									<td>kcal/Nm³</td>
+									<td>0.942</td>
+									<td>toe/천Nm3</td>
+									<td>2.200</td>
+									<td>tCO2/toe</td>
+									<td>740.20</td>
+									<td>원/Nm3</td>
+								  </tr>
+								  <tr>
+									<td>공조용</td>
+									<td>9,420</td>
+									<td>kcal/Nm³</td>
+									<td>0.942</td>
+									<td>toe/천Nm3</td>
+									<td>2.200</td>
+									<td>tCO2/toe</td>
+									<td>667.45</td>
+									<td>원/Nm3</td>
+								  </tr>
+								  <tr>
+									<td>산업용</td>
+									<td>9,420</td>
+									<td>kcal/Nm³</td>
+									<td>0.942</td>
+									<td>toe/천Nm3</td>
+									<td>2.200</td>
+									<td>tCO2/toe</td>
+									<td>720.86</td>
+									<td>원/Nm3</td>
+								  </tr>
+								  <tr>
+									<td rowspan="5" class="bdr1">7</td>
+									<td colspan="9">전력</td>
+								  </tr>
+								  <tr>
+									<td>주택용</td>
+									<td>2,300</td>
+									<td>kcal/kWh</td>
+									<td>0.230</td>
+									<td>toe/MWh</td>
+									<td>0.4585</td>
+									<td>tCO2/MWh</td>
+									<td>124.49</td>
+									<td>원/KWh</td>
+								  </tr>
+								  <tr>
+									<td>일반용</td>
+									<td>2,300</td>
+									<td>kcal/kWh</td>
+									<td>0.230</td>
+									<td>toe/MWh</td>
+									<td>0.4585</td>
+									<td>tCO2/MWh</td>
+									<td>126.11</td>
+									<td>원/KWh</td>
+								  </tr>
+								  <tr>
+									<td>교육용</td>
+									<td>2,300</td>
+									<td>kcal/kWh</td>
+									<td>0.230</td>
+									<td>toe/MWh</td>
+									<td>0.4585</td>
+									<td>tCO2/MWh</td>
+									<td>107.90</td>
+									<td>원/KWh</td>
+								  </tr>
+								  <tr>
+									<td>산업용</td>
+									<td>2,300</td>
+									<td>kcal/kWh</td>
+									<td>0.230</td>
+									<td>toe/MWh</td>
+									<td>0.4585</td>
+									<td>tCO2/MWh</td>
+									<td>105.05</td>
+									<td>원/KWh</td>
+								  </tr>
+								</tbody>
+							</table>
+						</div>
+
+						<h4 class="sub_tit_blue02">에너지절감 프로젝트 기준 정보 출처 및 업데이트 주기</h4>
+						<div class="table_sty01 non_hover mt0 scroll_940 m_scroll on">
+							<table>
+								<caption>에너지절감 프로젝트 기준 정보 출처 및 업데이트 주기표</caption>
+								<colgroup>
+									<col width="5%">
+									<col width="6%">
+									<col width="9%">
+									<col width="">
+									<col width="10%">
+									<col width="10%">
+								</colgroup>
+								<thead>
+								  <tr>
+									<th><span>번호</span></th>
+									<th colspan="2"><span>항목</span></th>
+									<th><span>출처</span></th>
+									<th><span>업데이트 일자</span></th>
+									<th><span>업데이트 주기</span></th>
+								  </tr>
+								</thead>
+								<tbody>
+								  <tr>
+									<td class="bdr1">1</td>
+									<td colspan="2" class="bdr1">연료별<br>순발열량 </td>
+									<td class="txt_l" onclick="toe_popup_clcik(); return false;">한국에너지공단통계분석실</td>
+									<td>2011.12.30</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">2</td>
+									<td colspan="2" class="bdr1">연료별<br>석유환산계수 </td>
+									<td class="txt_l" onclick="toe_popup_clcik(); return false;">한국에너지공단통계분석실</td>
+									<td>2011.12.30</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">3</td>
+									<td colspan="2" class="bdr1">연료별<br>CO2 배출계수 </td>
+									<td class="txt_l" onclick="toe_popup_clcik(); return false;">한국에너지공단통계분석실</td>
+									<td>2011.12.30</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td rowspan="7" class="bdr1">4</td>
+									<td rowspan="7" class="bdr1">연료별<br>단가</td>
+									<td class="bdr1">휘발유 </td>
+									<td>한국석유공사 제품별 평균 판매가격,<br><a href="http://www.opinet.co.kr/user/dopttot/doptTotSelect.do" target="_blank" title="새창열림" class="txt_link">http://www.opinet.co.kr/user/dopttot/doptTotSelect.do</a></td>
+									<td>2015.10.01</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">보일러등유 </td>
+									<td>한국석유공사 제품별 평균 판매가격, <br><a href="http://www.opinet.co.kr/user/dopttot/doptTotSelect.do" target="_blank" title="새창열림" class="txt_link">http://www.opinet.co.kr/user/dopttot/doptTotSelect.do</a></td>
+									<td>2011.10.11</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">경유 </td>
+									<td>한국석유공사 제품별 평균 판매가격,<br><a href="http://www.opinet.co.kr/user/dopttot/doptTotSelect.do" target="_blank" title="새창열림" class="txt_link">http://www.opinet.co.kr/user/dopttot/doptTotSelect.do</a></td>
+									<td>2015.10.01</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">B-C유</td>
+									<td>한국석유공사 제품별 평균 판매가격, <br><a href="http://www.opinet.co.kr/user/dopttot/doptTotSelect.do" target="_blank" title="새창열림" class="txt_link">http://www.opinet.co.kr/user/dopttot/doptTotSelect.do</a></td>
+									<td>2015.10.01</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">LPG</td>
+									<td>한국도시가스협회 시·도별 요금표</td>
+									<td>2015.03.01</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">LNG</td>
+									<td>한국도시가스협회 시·도별 요금표</td>
+									<td>2015.03.01</td>
+									<td>매월</td>
+								  </tr>
+								  <tr>
+									<td class="bdr1">전력</td>
+									<td>한국전력 전력통계 요약표, <br><a href="http://home.kepco.co.kr/kepco/KO/ntcob/list.do?boardCd=BRD_000098&amp;menuCd=FN05030102" target="_blank" title="새창열림" class="txt_link">http://home.kepco.co.kr/kepco/KO/ntcob/list.do?boardCd=BRD_000098&amp;menuCd=FN05030102</a></td>
+									<td>2015.06.30</td>
+									<td>년2번,<br>상하반기</td>
+								  </tr>
+								</tbody>
+							</table>
+						</div>
+						
+					</div>
+				</div>
+
+			</div>
+			<!--//sub_cont_wrap-->
+			
+		</div>
+		<!-- // container -->
+	
+		<!-- footer -->	
+		
+
+
+
+
+    
+
+
+
+	
+	<form action="http://www.koreacdm.com/icat/icatsso/ssoLogin.do" method="post" target="_blank" id="main_banner_form">
+		<input type="hidden" name="sKey" value="" />
+		<input type="hidden" name="CSRFToken" value="cd0b8599-988a-4205-99bb-9369eee86dd0" />
+	</form>
+	<script type="text/javascript">						
+		$("#main_banner_click").live("click", function () {
+			
+			alert("로그인 이후 사용이 가능 합니다");
+			
+		});
+		
+		function banerPopupLink() {
+			$("#main_banner_form").submit();
+		}
+	</script>
+	
+	<div class="family_site_wrap">
+		<div class="family_site_inner fix">
+			<div class="family_site_left fix">
+				<p>협력사 안내</p>
+				<ul class="btn_family fix">
+					<li class="swiper-button-prev"><span>이전버튼</span></li>
+					<li class="btns">
+						<button class="stop">정지</button>
+						<button class="start">시작</button>
+					</li>
+					<li class="swiper-button-next"><span>다음버튼</span></li>
+				</ul>
+			</div>
+			<div class="footer_slide swiper-container">
+				<ul class="family_site_cont swiper-wrapper fix">
+					<li class="swiper-slide"><a href="http://energy.or.kr/web/kem_home_new/new_main.asp" target="_blank"><img src="../images/main/img_f_banner01.jpg" alt="한국에너지공단" /></a></li>
+					<li class="swiper-slide"><a href="https://www.knrec.or.kr/main/main.aspx" target="_blank"><img src="../images/main/img_f_banner02.jpg" alt="한국에너지공단 신재생에너지센터" /></a></li>
+					<li class="swiper-slide"><a href="http://www.energynewbiz.or.kr/main" target="_blank"><img src="../images/main/img_f_banner03.jpg" alt="에너지신산업" /></a></li>
+					<!-- <li><a href="https://www.renewableenergy.or.kr/main.do"><img src="../images/main/img_f_banner04.jpg" alt="신재생에너지코리아" /></a></li> -->
+					<li class="swiper-slide"><a href="https://www.renewableenergy.or.kr" target="_blank"><img src="../images/main/img_f_banner04.jpg" alt="신재생에너지코리아" /></a></li>
+					<li class="swiper-slide"><a href="http://building.energy.or.kr/" target="_blank"><img src="../images/main/img_f_banner05.jpg" alt="한국에너지공단 건물에너지절약사업" /></a></li>
+					<li class="swiper-slide"><a href="http://eep.energy.or.kr/main/main.aspx" target="_blank"><img src="../images/main/img_f_banner06.jpg" alt="한국에너지공단 효율관리제도" /></a></li>
+					<li class="swiper-slide"><a href="http://bpms.kemco.or.kr/carmileage/PROD/Index.aspx" target="_blank"><img src="../images/main/img_f_banner07.jpg" alt="한국에너지공단 수송에너지" /></a></li>
+					<!-- <li><a href="http://www.kemco.or.kr/web/kem_home_new/info/mail/mail_list.asp"><img src="../images/main/img_f_banner08.jpg" alt="KEA 에너지 이슈 브리핑" /></a></li> -->
+					<li class="swiper-slide"><a href="https://www.energy.or.kr/web/kem_home_new/info/mail/mail_list.asp" target="_blank"><img src="../images/main/img_f_banner08.jpg" alt="KEA 에너지 이슈 브리핑" /></a></li>
+					<li class="swiper-slide"><a href="http://bea.energy.or.kr/Audit/def/def" target="_blank"><img src="../images/main/img_f_banner10.jpg" alt="에너지진단 우수사례" /></a></li>
+					
+					<li class="swiper-slide"><a href="#" id="main_banner_click"><img src="../images/main/img_f_banner09.jpg" alt="ICAT 기후변화 적응 진단툴"/></a></li>
+					
+				</ul>
+			</div>
+		</div>
+	</div>
+	
+	<div class="footer_wrap" id="footer">
+			<div class="footer_inner">
+				<div class="footer_top fix">
+					<div class="footer_top_left fix">
+						<h2><a href="../main/main.do"><img src="../images/common/logo_footer.png" alt=""></a></h2>
+						<ul class="footer_etc">
+							<li><a href="/about/terms.do">이용약관</a></li>
+							<li><a href="https://www.energy.or.kr/front/conts/107001000000000.do" target="_blank">개인정보취급방침</a></li>
+							<li><a href="/about/bouncing.do">이메일무단수집거부</a></li>
+						</ul>
+					</div>
+					<ul class="footer_top_right fix">
+						<li><a href="https://www.mcee.go.kr" target="_blank"><img src="../images/common/img_footer01.png" alt=""></a></li>
+						<li><a href="http://www.energy.or.kr" target="_blank"><img src="../images/common/img_footer02.png" alt=""></a></li>
+						<li><a href="http://www.acrc.go.kr/acrc/board.do?command=searchDetail&amp;menuId=050707" target="_blank"><img src="../images/common/img_footer03.png" alt=""></a></li>
+					</ul>
+				</div>
+				<div class="footer_bott fix">
+					<div class="footer_bott_left">
+						<address>
+							<p class="footer_address"><span>44538 울산광역시 중구 종가로 323 (우정동 528-1)</span><span>대표전화 : 052) 920-0114</span></p>
+							<p class="footer_copyright"><span>Copyright ⓒ 2021 Energy GHG Total Information Platform Service. All Rights Reserved.</span></p>
+						</address>
+					</div>
+					<div class="footer_bott_right fix">
+						<a href="#" class="btn_top"><span>TOP</span></a>
+					</div>
+				</div>
+			</div>
+		</div>
+		
+		<!-- // footer -->
+	</div>
+</div>
+<script type="text/javascript">
+$(function() {
+	 $(".ft_banner_list").slick({
+		  slidesToShow: 4,
+		  slidesToScroll: 1,
+		  autoplay: true,
+		  autoplaySpeed: 2000
+
+  });
+});
+</script>
+<!--// wrap -->
+</body>
+</html>
