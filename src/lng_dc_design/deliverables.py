@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import subprocess
 
 import pandas as pd
-from pptx import Presentation
-from pptx.enum.text import PP_ALIGN
-from pptx.util import Inches, Pt
 
 from .thermo import ensure_directory
 
@@ -275,74 +274,76 @@ def build_presentation_script(project_root: Path) -> Path:
     output_dir = project_root / "output"
     deliverables_dir = ensure_directory(project_root / "deliverables")
     summary = _summary_map(output_dir)
+    alternatives = pd.read_csv(output_dir / "alternative_designs.csv")
     distance = pd.read_csv(output_dir / "distance_scenarios.csv")
     temperature = pd.read_csv(output_dir / "supply_temperature_sweep.csv")
+    annual = pd.read_csv(output_dir / "annual_summary.csv")
+    selected_alternative = alternatives.iloc[0]
     long_distance = distance.sort_values("distance_km").iloc[-1]
     high_temp = temperature[(temperature["status"] == "feasible") & (temperature["long_distance_meets_load"] == True)].head(1)
+    annual_map = {
+        str(row["metric"]): {
+            "value": float(row["value"]),
+            "unit": str(row["unit"]),
+        }
+        for _, row in annual.iterrows()
+    }
 
     script_lines = [
         "# Presentation Script",
         "",
-        "## Slide 1. Title",
-        "- State the project goal: replacing a conventional data-center cooling load with LNG cold energy.",
-        "- Emphasize that the project was rebuilt as a reproducible code-based study.",
+        "## Slide 1. Title and Core Message",
+        "- Open with the design question: can LNG cold energy replace a conventional data-center cooling duty?",
+        "- Emphasize that the project is now a reproducible, code-based engineering study rather than a one-off spreadsheet.",
+        f"- Highlight the three anchor numbers immediately: cooling load {_format_number(float(summary['IDC total cooling load']['value']))} kW, baseline compressor power {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW, LNG pump power {_format_number(float(summary['LNG system pump power']['value']))} kW.",
         "",
-        "## Slide 2. Why This Problem Matters",
-        "- Data centers concentrate electrical load and cooling demand.",
-        "- LNG regasification discards large amounts of cold energy.",
-        "- The project asks whether that cold energy can reduce cooling power demand.",
+        "## Slide 2. Design Question and Basis",
+        "- Frame the assignment constraints before showing any design result.",
+        "- Use the modeled cooling load and the transport-distance requirement as the two hardest assignment constraints.",
+        "- Call out that sources and assumptions are explicitly tracked inside the project repository.",
         "",
-        "## Slide 3. Design Basis",
-        f"- Total modeled cooling load is {_format_number(float(summary['IDC total cooling load']['value']))} kW.",
-        "- Base transport distance is 10 km and the challenge case is 35 km.",
-        "- The study keeps explicit source and assumption traceability.",
+        "## Slide 3. System Concept",
+        "- Explain the architecture in one sentence: LNG cold energy chills a secondary loop, and that loop transports duty to the IDC.",
+        "- Mention the two design bottlenecks: vaporizer pinch and long-distance transport penalty.",
+        f"- State the current base-case fluid choice: {summary['Selected coolant']['value']}.",
         "",
-        "## Slide 4. Baseline Benchmark",
+        "## Slide 4. Benchmark Against the Reference Cycle",
         f"- Theoretical minimum power is {_format_number(float(summary['Theoretical minimum power']['value']))} kW.",
         f"- Reference R-134a compressor power is {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW.",
-        "- This baseline is the anchor for judging LNG-system benefit.",
+        f"- The modeled LNG loop pump demand is only {_format_number(float(summary['LNG system pump power']['value']))} kW, which defines the main energy argument.",
         "",
-        "## Slide 5. Proposed LNG Cooling Concept",
-        "- LNG cold energy cools a secondary-loop refrigerant through a shell-and-tube vaporizer.",
-        "- The secondary loop transports cooling duty from the terminal to the IDC.",
-        "- The final base-case fluid is ammonia.",
+        "## Slide 5. Coolant Selection",
+        f"- Present {selected_alternative['fluid']} as the base-case winner, not as an arbitrary choice but as the best trade-off in the modeled ranking.",
+        "- Explain that the screening compares feasibility, pumping demand, heat-exchanger scale, and downstream annual benefit.",
+        "- Position propane and isobutane as useful alternatives rather than discarded options.",
         "",
-        "## Slide 6. Coolant Screening Result",
-        "- Among the feasible fluids, ammonia gives the lowest loop pumping power in the base case.",
-        "- Propane and isobutane remain feasible alternatives but are materially weaker in pump power.",
-        "- The selection is not arbitrary because the full ranking is reproduced by code.",
+        "## Slide 6. Transport-Distance Constraint",
+        f"- State the base result clearly: maximum feasible one-way distance is about {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km.",
+        f"- Therefore the {int(long_distance['distance_km'])} km case is {'feasible' if bool(long_distance['meets_idc_load']) else 'not feasible'} at the current design point.",
+        "- Use this as a design insight, not as a failure: transport distance is the real system constraint after the base 10 km case closes.",
         "",
-        "## Slide 7. Heat Exchanger Design",
-        "- The LNG vaporizer is solved with a segmented enthalpy-based model.",
-        "- The selected geometry is 500 tubes x 14 m with a shell diameter of about 0.723 m.",
-        "- The minimum pinch is held at 10 K.",
+        "## Slide 7. Temperature Trade-off",
+        "- Explain that a warmer supply temperature increases transport feasibility but also changes the fluid preference and pumping penalty.",
+        "- Show that recovering 35 km is possible only by moving the operating point, not by assuming the base design magically stretches that far.",
         "",
-        "## Slide 8. Pipeline Result",
-        f"- Base-case LNG loop pumping power is {_format_number(float(summary['LNG system pump power']['value']))} kW.",
-        f"- Estimated maximum feasible one-way distance is {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km.",
-        f"- Therefore the {int(long_distance['distance_km'])} km case is {'feasible' if bool(long_distance['meets_idc_load']) else 'not feasible'} at the base design point.",
+        "## Slide 8. Annual Impact",
+        f"- Annual electricity saving is {_format_number(annual_map['Electricity saving']['value'])} {annual_map['Electricity saving']['unit']}.",
+        f"- Annual electricity cost saving is {_format_number(annual_map['Electricity cost saving']['value'] / 1_000_000.0)} million KRW/year.",
+        f"- Annual avoided indirect emissions are {_format_number(annual_map['Avoided indirect emissions']['value'])} {annual_map['Avoided indirect emissions']['unit']}.",
         "",
-        "## Slide 9. Sensitivity Insight",
-        "- Distance sensitivity shows where the thermal margin collapses.",
-        "- Supply-temperature sensitivity shows that 35 km can be recovered by moving to a warmer supply temperature.",
+        "## Slide 9. Recommendation",
+        "- Close with a decision statement: the 10 km LNG cold-energy design is technically feasible and strongly attractive on an energy basis.",
+        "- Say explicitly that 35 km requires a changed operating point and should be treated as a design extension, not the base promise.",
     ]
     if not high_temp.empty:
         row = high_temp.iloc[0]
-        script_lines.append(
-            f"- At {row['supply_temp_c']:.1f} C supply temperature, the design becomes feasible at 35 km with {row['selected_fluid']}."
+        script_lines.insert(
+            script_lines.index("## Slide 8. Annual Impact") - 1,
+            f"- Mention the recovery point explicitly: at {row['supply_temp_c']:.1f} C supply temperature, the design becomes feasible at 35 km with {row['selected_fluid']}.",
         )
     script_lines.extend(
         [
-            "",
-            "## Slide 10. Annual Impact",
-            f"- Annual electricity saving is {_format_number(float(summary['Annual electricity saving']['value']))} MWh/year.",
-            f"- Annual electricity cost saving is {_format_number(float(summary['Annual electricity cost saving']['value']) / 1_000_000.0)} million KRW/year.",
-            f"- Annual avoided indirect emissions are {_format_number(float(summary['Annual avoided indirect emissions']['value']))} tCO2/year.",
-            "",
-            "## Slide 11. Closing Message",
-            "- The 10 km LNG cold-energy design is technically feasible and energetically attractive.",
-            "- The 35 km case is the real design boundary test, not a simple extension of the base case.",
-            "- The codebase now supports traceable report writing and future design refinement.",
+            "- End by positioning the project as a reusable design study with traceable sources, assumptions, and scenarios.",
         ]
     )
     script_path = deliverables_dir / "presentation_script.md"
@@ -350,180 +351,28 @@ def build_presentation_script(project_root: Path) -> Path:
     return script_path
 
 
-def _add_title_slide(prs: Presentation, title: str, subtitle: str) -> None:
-    slide = prs.slides.add_slide(prs.slide_layouts[0])
-    slide.shapes.title.text = title
-    slide.placeholders[1].text = subtitle
-
-
-def _add_bullet_slide(prs: Presentation, title: str, bullets: list[str], footer: str | None = None) -> None:
-    slide = prs.slides.add_slide(prs.slide_layouts[1])
-    slide.shapes.title.text = title
-    text_frame = slide.placeholders[1].text_frame
-    text_frame.clear()
-    for index, bullet in enumerate(bullets):
-        paragraph = text_frame.paragraphs[0] if index == 0 else text_frame.add_paragraph()
-        paragraph.text = bullet
-        paragraph.level = 0
-        paragraph.font.size = Pt(22)
-    if footer:
-        box = slide.shapes.add_textbox(Inches(0.4), Inches(6.7), Inches(12.0), Inches(0.35))
-        paragraph = box.text_frame.paragraphs[0]
-        paragraph.text = footer
-        paragraph.font.size = Pt(10)
-        paragraph.alignment = PP_ALIGN.RIGHT
-
-
-def _add_image_slide(prs: Presentation, title: str, bullets: list[str], image_path: Path, footer: str | None = None) -> None:
-    slide = prs.slides.add_slide(prs.slide_layouts[5])
-    slide.shapes.title.text = title
-    textbox = slide.shapes.add_textbox(Inches(0.3), Inches(0.9), Inches(4.5), Inches(5.7))
-    frame = textbox.text_frame
-    frame.clear()
-    for index, bullet in enumerate(bullets):
-        paragraph = frame.paragraphs[0] if index == 0 else frame.add_paragraph()
-        paragraph.text = bullet
-        paragraph.level = 0
-        paragraph.font.size = Pt(20)
-    slide.shapes.add_picture(str(image_path), Inches(4.9), Inches(1.0), width=Inches(8.1))
-    if footer:
-        box = slide.shapes.add_textbox(Inches(0.3), Inches(6.75), Inches(12.5), Inches(0.3))
-        paragraph = box.text_frame.paragraphs[0]
-        paragraph.text = footer
-        paragraph.font.size = Pt(10)
-        paragraph.alignment = PP_ALIGN.RIGHT
-
-
 def build_presentation(project_root: Path) -> Path:
-    output_dir = project_root / "output"
-    figure_dir = output_dir / "figures"
     deliverables_dir = ensure_directory(project_root / "deliverables")
-    summary = _summary_map(output_dir)
-    distance = pd.read_csv(output_dir / "distance_scenarios.csv")
-    temperature = pd.read_csv(output_dir / "supply_temperature_sweep.csv")
-    long_distance = distance.sort_values("distance_km").iloc[-1]
-    best_temp = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw").iloc[0]
+    slides_src_dir = ensure_directory(deliverables_dir / "slides_src")
+    deck_source = slides_src_dir / "presentation_draft.js"
+    package_json = slides_src_dir / "package.json"
+    node_modules_dir = slides_src_dir / "node_modules"
+    npm_executable = "npm.cmd" if os.name == "nt" else "npm"
+    node_executable = "node.exe" if os.name == "nt" else "node"
 
-    prs = Presentation()
-    prs.slide_width = Inches(13.333)
-    prs.slide_height = Inches(7.5)
+    if not deck_source.exists():
+        raise FileNotFoundError(f"Missing slide source: {deck_source}")
+    if not package_json.exists():
+        raise FileNotFoundError(f"Missing slide package manifest: {package_json}")
 
-    _add_title_slide(
-        prs,
-        "LNG Cold-Energy Based IDC Cooling System",
-        "Thermal System Design Project Reconstructed with Reproducible Python Models",
-    )
-    _add_bullet_slide(
-        prs,
-        "Why This Project Matters",
-        [
-            "Data centers require large and continuous cooling power.",
-            "LNG regasification releases large amounts of usable cold energy.",
-            "The project evaluates whether that cold energy can displace a conventional vapor-compression load.",
-        ],
-        footer="Sources: SRC-001, SRC-009, SRC-011",
-    )
-    _add_image_slide(
-        prs,
-        "Load and Baseline",
-        [
-            f"Modeled IDC cooling load: {_format_number(float(summary['IDC total cooling load']['value']))} kW",
-            f"Theoretical minimum power: {_format_number(float(summary['Theoretical minimum power']['value']))} kW",
-            f"Reference R-134a compressor power: {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW",
-        ],
-        figure_dir / "load_breakdown.png",
-        footer="Sources: SRC-001, ASM-001 to ASM-011",
-    )
-    _add_image_slide(
-        prs,
-        "Baseline Benchmark Cycle",
-        [
-            "The baseline system is modeled as a simple R-134a vapor-compression cycle.",
-            "This reference is used to quantify power savings from the LNG concept.",
-            "The benchmark remains above the theoretical minimum, as expected.",
-        ],
-        figure_dir / "baseline_cycle_ph.png",
-        footer="Sources: SRC-001, SRC-004, SRC-005",
-    )
-    _add_image_slide(
-        prs,
-        "Coolant Screening Result",
-        [
-            f"Selected coolant: {summary['Selected coolant']['value']}",
-            "Ammonia gives the lowest loop pumping demand among feasible base-case options.",
-            "Propane and isobutane remain viable fallback candidates.",
-        ],
-        figure_dir / "fluid_ranking.png",
-        footer="Sources: SRC-003, SRC-008, ASM-017 to ASM-019",
-    )
-    _add_image_slide(
-        prs,
-        "LNG Vaporizer Design",
-        [
-            "Segmented enthalpy-based shell-and-tube design was used instead of a single constant-cp approximation.",
-            "Selected geometry: 500 tubes x 14 m",
-            "Minimum pinch maintained at 10 K",
-        ],
-        figure_dir / "hx_temperature_profile.png",
-        footer="Sources: SRC-001, SRC-006, SRC-007",
-    )
-    _add_image_slide(
-        prs,
-        "Pipeline Design and Constraint",
-        [
-            f"Base-case loop pump power: {_format_number(float(summary['LNG system pump power']['value']))} kW",
-            f"Estimated maximum feasible one-way distance: {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km",
-            f"The 35 km case is {'feasible' if bool(long_distance['meets_idc_load']) else 'not feasible'} at the base design point.",
-        ],
-        figure_dir / "pipeline_distance_sensitivity.png",
-        footer="Sources: SRC-001, ASM-014 to ASM-016",
-    )
-    _add_image_slide(
-        prs,
-        "Temperature Sensitivity",
-        [
-            f"Best pump-power point: {_format_number(best_temp['supply_temp_c'])} C",
-            f"Best fluid at that point: {best_temp['selected_fluid']}",
-            "Warmer supply levels can extend feasible transport distance at the cost of larger pumping demand.",
-        ],
-        figure_dir / "supply_temperature_sensitivity.png",
-        footer="Sources: ASM-028, ASM-029",
-    )
-    _add_image_slide(
-        prs,
-        "Annual Impact",
-        [
-            f"Annual electricity saving: {_format_number(float(summary['Annual electricity saving']['value']))} MWh/year",
-            f"Annual cost saving: {_format_number(float(summary['Annual electricity cost saving']['value']) / 1_000_000.0)} million KRW/year",
-            f"Annual avoided indirect emissions: {_format_number(float(summary['Annual avoided indirect emissions']['value']))} tCO2/year",
-        ],
-        figure_dir / "annual_impact_comparison.png",
-        footer="Sources: SRC-013, SRC-014, ASM-030, ASM-032",
-    )
-    _add_image_slide(
-        prs,
-        "Comparison with Legacy Work",
-        [
-            "The recreated Python workflow reproduces the scale of the original spreadsheet benchmark.",
-            "The new version adds traceability, validation, and full scenario sweeps.",
-            "This turns a one-off project into a reusable design study.",
-        ],
-        figure_dir / "legacy_comparison.png",
-        footer="Sources: SRC-010 and current Python workflow",
-    )
-    _add_bullet_slide(
-        prs,
-        "Conclusion",
-        [
-            "The LNG cold-energy concept is technically feasible at the 10 km base design point.",
-            "The base design strongly reduces modeled electrical demand relative to the reference system.",
-            "The 35 km case defines a real design boundary and motivates a trade-off between transport distance and operating temperature.",
-        ],
-        footer="Summary from reproducible project outputs",
-    )
+    if not node_modules_dir.exists():
+        subprocess.run([npm_executable, "install"], cwd=slides_src_dir, check=True)
+
+    subprocess.run([node_executable, str(deck_source)], cwd=slides_src_dir, check=True)
 
     pptx_path = deliverables_dir / "presentation_draft.pptx"
-    prs.save(str(pptx_path))
+    if not pptx_path.exists():
+        raise FileNotFoundError(f"Slide build did not produce {pptx_path}")
     return pptx_path
 
 

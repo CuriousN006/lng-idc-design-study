@@ -12,6 +12,9 @@ python -m lng_dc_design run-all --config config/base.toml
 python -m unittest discover -s tests
 ```
 
+`build-slides`와 `build-deliverables`는 로컬 `deliverables/slides_src/`의 PptxGenJS 소스를 사용합니다.  
+Node.js가 설치되어 있으면 첫 실행 시 `node_modules/`가 해당 폴더 안에 자동으로 생성됩니다.
+
 ## Main Commands
 
 ```powershell
@@ -43,3 +46,4 @@ python -m lng_dc_design validate --config config/base.toml
 - `deliverables/report_draft.md`
 - `deliverables/presentation_script.md`
 - `deliverables/presentation_draft.pptx`
+- `deliverables/slides_src/presentation_draft.js`

@@ -6,3 +6,5 @@ src/lng_dc_design/__pycache__/
 src/*.egg-info/
 references/local/*.pdf
 references/web/gir_electricity_emission_factor_2024.html
+deliverables/slides_src/node_modules/
+deliverables/slides_src/rendered/

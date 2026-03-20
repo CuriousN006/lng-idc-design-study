@@ -1,0 +1,10 @@
+{
+  "name": "lng-idc-slides",
+  "private": true,
+  "version": "1.0.0",
+  "description": "PptxGenJS authoring source for the LNG IDC design study deck",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "pptxgenjs": "^4.0.1"
+  }
+}
