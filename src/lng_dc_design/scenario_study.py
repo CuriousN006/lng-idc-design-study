@@ -11,6 +11,14 @@ from .hx_lng_vaporizer import design_lng_vaporizer
 from .pipeline_loop import design_pipeline
 
 
+def _merge_fluid_with_pipeline(selected_fluid: dict, pipeline_result: dict) -> dict[str, object]:
+    merged = dict(selected_fluid)
+    merged["required_mass_flow_kg_s"] = float(pipeline_result["selected_design"]["required_mass_flow_kg_s"])
+    merged["after_idc_temp_k"] = float(pipeline_result["after_idc_temp_k"])
+    merged["return_to_lng_temp_k"] = float(pipeline_result["selected_design"]["return_to_lng_temp_k"])
+    return merged
+
+
 def evaluate_feasible_alternatives(config: dict, load_result: object, baseline: dict, screening: dict) -> dict[str, object]:
     rows: list[dict[str, object]] = []
     feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
@@ -18,11 +26,19 @@ def evaluate_feasible_alternatives(config: dict, load_result: object, baseline: 
     for _, candidate in feasible_candidates.iterrows():
         selected_fluid = candidate.to_dict()
         try:
-            hx_result = design_lng_vaporizer(config, selected_fluid, screening["total_lng_duty_kw"])
-            pipeline_result = design_pipeline(config, selected_fluid, load_result.total_kw, hx_result)
+            pipeline_result = design_pipeline(config, selected_fluid, load_result.total_kw)
+            hx_result = design_lng_vaporizer(
+                config,
+                _merge_fluid_with_pipeline(selected_fluid, pipeline_result),
+                float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+            )
             selected_pipeline = pipeline_result["selected_design"]
             pump_power_kw = float(selected_pipeline["pump_power_kw"])
-            available_cooling_kw = hx_result["required_lng_duty_kw"] - float(selected_pipeline["heat_gain_kw"])
+            available_cooling_kw = (
+                hx_result["required_lng_duty_kw"]
+                - float(selected_pipeline["heat_gain_kw"])
+                - float(selected_pipeline["supplemental_warmup_kw"])
+            )
             rows.append(
                 {
                     "fluid": candidate["fluid"],
@@ -37,6 +53,7 @@ def evaluate_feasible_alternatives(config: dict, load_result: object, baseline: 
                     "pipeline_return_id_m": float(selected_pipeline["return_id_m"]),
                     "pipeline_insulation_thickness_m": float(selected_pipeline["insulation_thickness_m"]),
                     "pipeline_heat_gain_kw": float(selected_pipeline["heat_gain_kw"]),
+                    "supplemental_warmup_kw": float(selected_pipeline["supplemental_warmup_kw"]),
                     "pump_power_kw": pump_power_kw,
                     "available_cooling_kw": available_cooling_kw,
                     "power_saving_kw": baseline["compressor_power_kw"] - pump_power_kw,
@@ -89,19 +106,23 @@ def build_distance_scenarios(config: dict, load_result: object, baseline: dict, 
     for _, sensitivity_row in pipeline_result["sensitivity"].iterrows():
         pump_power_kw = float(sensitivity_row["pump_power_kw"])
         heat_gain_kw = float(sensitivity_row["heat_gain_kw"])
-        available_cooling_kw = hx_result["required_lng_duty_kw"] - heat_gain_kw
+        supplemental_warmup_kw = float(sensitivity_row["supplemental_warmup_kw"])
+        available_cooling_kw = hx_result["required_lng_duty_kw"] - heat_gain_kw - supplemental_warmup_kw
         rows.append(
             {
                 "distance_m": float(sensitivity_row["distance_m"]),
                 "distance_km": float(sensitivity_row["distance_m"]) / 1000.0,
                 "heat_gain_kw": heat_gain_kw,
                 "heat_gain_fraction": float(sensitivity_row["heat_gain_fraction"]),
+                "supplemental_warmup_kw": supplemental_warmup_kw,
                 "pump_power_kw": pump_power_kw,
                 "available_cooling_kw": available_cooling_kw,
                 "thermal_margin_kw": available_cooling_kw - load_result.total_kw,
                 "equivalent_cop": load_result.total_kw / pump_power_kw,
                 "power_saving_kw": baseline["compressor_power_kw"] - pump_power_kw,
-                "meets_idc_load": available_cooling_kw >= load_result.total_kw - 1e-6,
+                "return_to_lng_temp_k": float(sensitivity_row["return_to_lng_temp_k"]),
+                "hot_end_margin_k": float(sensitivity_row["hot_end_margin_k"]),
+                "meets_idc_load": bool(sensitivity_row["feasible"]),
                 "max_feasible_distance_m": float(pipeline_result["max_feasible_distance_m"]),
             }
         )
@@ -110,12 +131,7 @@ def build_distance_scenarios(config: dict, load_result: object, baseline: dict, 
 
 def _with_supply_temperature(config: dict, supply_temp_k: float) -> dict:
     trial = deepcopy(config)
-    base_loop = config["coolant_loop"]
-    delta_idc = base_loop["after_idc_temp_k"] - base_loop["supply_temp_k"]
-    delta_return = base_loop["return_to_lng_temp_k"] - base_loop["after_idc_temp_k"]
     trial["coolant_loop"]["supply_temp_k"] = supply_temp_k
-    trial["coolant_loop"]["after_idc_temp_k"] = supply_temp_k + delta_idc
-    trial["coolant_loop"]["return_to_lng_temp_k"] = supply_temp_k + delta_idc + delta_return
     return trial
 
 
@@ -125,12 +141,23 @@ def evaluate_supply_temperature_sweep(config: dict, load_result: object, baselin
         trial_config = _with_supply_temperature(config, float(supply_temp_k))
         try:
             screening = compute_fluid_screening(trial_config, load_result.total_kw)
-            hx_result = design_lng_vaporizer(trial_config, screening["selected"], screening["total_lng_duty_kw"])
-            pipeline_result = design_pipeline(trial_config, screening["selected"], load_result.total_kw, hx_result)
+            pipeline_result = design_pipeline(trial_config, screening["selected"], load_result.total_kw)
+            hx_result = design_lng_vaporizer(
+                trial_config,
+                _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+                float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+            )
             selected_design = pipeline_result["selected_design"]
-            long_distance_row = pipeline_result["sensitivity"].sort_values("distance_m").iloc[-1]
-            available_cooling_kw = hx_result["required_lng_duty_kw"] - float(selected_design["heat_gain_kw"])
-            long_distance_available_kw = hx_result["required_lng_duty_kw"] - float(long_distance_row["heat_gain_kw"])
+            target_distance_m = float(trial_config["system_targets"]["long_distance_pipeline_m"])
+            long_distance_rows = pipeline_result["sensitivity"].loc[
+                (pipeline_result["sensitivity"]["distance_m"] - target_distance_m).abs() < 1e-6
+            ]
+            long_distance_row = long_distance_rows.iloc[0] if not long_distance_rows.empty else pipeline_result["sensitivity"].sort_values("distance_m").iloc[-1]
+            available_cooling_kw = (
+                hx_result["required_lng_duty_kw"]
+                - float(selected_design["heat_gain_kw"])
+                - float(selected_design["supplemental_warmup_kw"])
+            )
             rows.append(
                 {
                     "supply_temp_k": float(supply_temp_k),
@@ -139,13 +166,14 @@ def evaluate_supply_temperature_sweep(config: dict, load_result: object, baselin
                     "screening_score": float(screening["selected"]["score"]),
                     "pump_power_kw": float(selected_design["pump_power_kw"]),
                     "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
+                    "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
                     "hx_shell_diameter_m": float(hx_result["selected_geometry"]["shell_diameter_m"]),
                     "hx_tube_count": int(hx_result["selected_geometry"]["tube_count"]),
                     "available_cooling_kw": available_cooling_kw,
                     "thermal_margin_kw": available_cooling_kw - load_result.total_kw,
                     "power_saving_kw": baseline["compressor_power_kw"] - float(selected_design["pump_power_kw"]),
                     "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
-                    "long_distance_meets_load": long_distance_available_kw >= load_result.total_kw - 1e-6,
+                    "long_distance_meets_load": bool(long_distance_row["feasible"]),
                     "status": "feasible",
                     "failure_reason": "",
                 }

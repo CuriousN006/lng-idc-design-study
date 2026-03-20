@@ -22,7 +22,7 @@
 | ASM-016 | Minor loss coefficient | K = 10 per line | 밸브/엘보/헤더 등 lumped loss |
 | ASM-017 | Fluid safety penalties | candidate-specific heuristic penalties | 독성/가연성 차이를 ranking에 반영 |
 | ASM-018 | Material compatibility penalties | candidate-specific heuristic penalties | 암모니아/재질 호환성 차이를 ranking에 반영 |
-| ASM-019 | Coolant loop temperatures | 220 K -> 286 K -> 293 K | 기존 2022 엑셀 해석의 온도 레벨을 코드형으로 정리한 기본 설계점 |
+| ASM-019 | Coolant loop temperature fallback | 220 K supply, 286 K after IDC, 293 K return to LNG | 기존 2022 엑셀 해석을 보존하기 위한 fallback 온도 세트이며, 현재는 동적 IDC 열교환기 계산이 우선 적용됨 |
 | ASM-020 | LNG vaporizer segmentation | 112-190-205-220-283 K | 비열 급변 영역을 반영하는 4구간 모델 |
 | ASM-021 | Baffle spacing | 0.30 m | 기존 계산 흔적과 textbook scale의 절충 |
 | ASM-022 | Tube wall conductivity | 16 W/m-K | 금속관의 대표 열전도율 |
@@ -32,7 +32,10 @@
 | ASM-026 | Pipe wall thickness | 8 mm | 대구경 산업 배관의 단순 기본값 |
 | ASM-027 | Distance sensitivity sweep grid | 5-35 km in 5 km steps | 기본 10 km와 장거리 한계 사이의 경향 확인 |
 | ASM-028 | Coolant supply-temperature sweep grid | 215-230 K | 설계점 주변의 운전 온도 민감도 확인 |
-| ASM-029 | Supply-temperature sweep method | IDC and return-line temperature rises held constant while shifting supply temperature | 운전 온도 수준 변화만 보고, 부하측 열교환기 ΔT 구조는 유지하는 비교 규칙 |
+| ASM-029 | Supply-temperature sweep method | Only supply temperature is perturbed, and the IDC-side HX is re-solved at each sweep point | 운전 온도 수준 변화를 보되, 부하측 열교환기와 환수온도는 매번 다시 맞추는 물리 결합형 sweep 규칙 |
 | ASM-030 | Annual operating hours | 8,760 h/year | 데이터센터의 연중 상시 운전을 반영한 연간화 기준 |
 | ASM-031 | Simple payback targets | 3, 5, 7, 10 years | 추가 투자 허용범위를 빠르게 읽기 위한 경제성 지표 |
 | ASM-032 | Economic comparison boundary | Baseline compressor power vs LNG loop pump power only | 냉각 시스템 핵심 동력 비교이며, 상세 O&M/보조기기/금융비용은 v1 범위 밖 |
+| ASM-033 | IDC-side HX overall U | 850 W/m2-K | 액체-액체 열교환기의 1차 설계용 보수적 overall U 기본값 |
+| ASM-034 | Chilled-water specific heat | 4,180 J/kg-K | 7/12°C 단상 냉수의 대표 비열값 |
+| ASM-035 | IDC-side HX model structure | Counterflow 2-point pinch model with 7/12°C chilled water and minimum approach constraint | IDC 부하측 열교환기와 2차 루프를 전체 네트워크 없이도 물리적으로 연결하기 위한 최소 모델 |

@@ -8,11 +8,12 @@ from .config import load_config
 from .deliverables import build_deliverables, build_presentation, build_report, build_presentation_script
 from .fluid_screening import compute_fluid_screening
 from .hx_lng_vaporizer import design_lng_vaporizer
+from .idc_hx import evaluate_idc_heat_exchange
 from .legacy_compare import compare_with_legacy_excel
 from .load_model import compute_load_model
 from .pipeline_loop import design_pipeline
 from .report_assets import write_outputs
-from .scenario_study import build_distance_scenarios, evaluate_feasible_alternatives, evaluate_supply_temperature_sweep
+from .scenario_study import _merge_fluid_with_pipeline, build_distance_scenarios, evaluate_feasible_alternatives, evaluate_supply_temperature_sweep
 from .system_eval import evaluate_system
 from .thermo_limit import compute_theoretical_minimum_power
 from .validation import validate_run
@@ -28,8 +29,13 @@ def run_all(config_path: Path) -> dict[str, object]:
     baseline = compute_baseline_cycle(values, load_result.total_kw)
     legacy_result = compare_with_legacy_excel(project_root, baseline, minimum_power)
     screening = compute_fluid_screening(values, load_result.total_kw)
-    hx_result = design_lng_vaporizer(values, screening["selected"], screening["total_lng_duty_kw"])
-    pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw, hx_result)
+    idc_hx_result = evaluate_idc_heat_exchange(values, screening["selected"]["coolprop_name"], load_result.total_kw)
+    pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
+    hx_result = design_lng_vaporizer(
+        values,
+        _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+        float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+    )
     scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening)
     distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
     supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
@@ -42,6 +48,7 @@ def run_all(config_path: Path) -> dict[str, object]:
         minimum_power,
         baseline,
         screening,
+        idc_hx_result,
         hx_result,
         pipeline_result,
         scenario_result,
@@ -57,6 +64,7 @@ def run_all(config_path: Path) -> dict[str, object]:
         "baseline": baseline,
         "legacy": legacy_result,
         "screening": screening,
+        "idc_hx": idc_hx_result,
         "hx": hx_result,
         "pipeline": pipeline_result,
         "scenario": scenario_result,
@@ -93,15 +101,19 @@ def main() -> int:
 
     if args.command == "design-hx":
         screening = compute_fluid_screening(values, load_result.total_kw)
-        hx_result = design_lng_vaporizer(values, screening["selected"], screening["total_lng_duty_kw"])
+        pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
+        hx_result = design_lng_vaporizer(
+            values,
+            _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+            float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+        )
         print(hx_result["segments"].to_string(index=False))
         print(hx_result["selected_geometry"])
         return 0
 
     if args.command == "analyze-pipeline":
         screening = compute_fluid_screening(values, load_result.total_kw)
-        hx_result = design_lng_vaporizer(values, screening["selected"], screening["total_lng_duty_kw"])
-        pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw, hx_result)
+        pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
         print(pipeline_result["sensitivity"].to_string(index=False))
         print(pipeline_result["selected_design"])
         return 0
@@ -110,8 +122,12 @@ def main() -> int:
         minimum_power = compute_theoretical_minimum_power(values, load_result.total_kw)
         baseline = compute_baseline_cycle(values, load_result.total_kw)
         screening = compute_fluid_screening(values, load_result.total_kw)
-        hx_result = design_lng_vaporizer(values, screening["selected"], screening["total_lng_duty_kw"])
-        pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw, hx_result)
+        pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
+        hx_result = design_lng_vaporizer(
+            values,
+            _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+            float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+        )
         scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening)
         distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
         supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)

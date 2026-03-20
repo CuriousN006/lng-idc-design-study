@@ -179,10 +179,22 @@ source_id = "ASM-019"
 [coolant_loop.after_idc_temp_k]
 value = 286.0
 source_id = "ASM-019"
+description = "Legacy fallback only; dynamic IDC HX model overrides this when screening succeeds"
 
 [coolant_loop.return_to_lng_temp_k]
 value = 293.0
 source_id = "ASM-019"
+description = "Legacy fallback only; dynamic IDC HX model overrides this when screening succeeds"
+
+[idc_hx.chilled_water_cp_j_per_kgk]
+value = 4180.0
+source_id = "ASM-034"
+description = "Single-phase chilled-water specific heat"
+
+[idc_hx.overall_u_w_per_m2k]
+value = 850.0
+source_id = "ASM-033"
+description = "First-pass overall U estimate for the IDC-side liquid-liquid heat exchanger"
 
 [hx_design.segment_boundaries_k]
 value = [112.0, 190.0, 205.0, 220.0, 283.0]

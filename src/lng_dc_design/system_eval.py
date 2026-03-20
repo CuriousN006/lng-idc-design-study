@@ -19,7 +19,12 @@ def evaluate_system(
     q_load_kw = load_result.total_kw
     q_lng_kw = hx_result["required_lng_duty_kw"]
     q_env_kw = pipeline["heat_gain_kw"]
-    available_to_idc_kw = q_lng_kw - q_env_kw
+    q_supplemental_kw = float(pipeline.get("supplemental_warmup_kw", 0.0))
+    idc_after_k = float(hx_result["after_idc_temp_k"])
+    return_to_lng_k = float(hx_result["return_to_lng_temp_k"])
+    idc_hx_area_m2 = float(screening["selected"]["idc_hx_area_m2"])
+    idc_hx_min_pinch_k = float(screening["selected"]["idc_hx_min_pinch_k"])
+    available_to_idc_kw = q_lng_kw - q_env_kw - q_supplemental_kw
     pump_kw = pipeline["pump_power_kw"]
     equivalent_cop = q_load_kw / pump_kw
     power_saving_kw = baseline["compressor_power_kw"] - pump_kw
@@ -29,10 +34,15 @@ def evaluate_system(
             {"metric": "IDC total cooling load", "value": q_load_kw, "unit": "kW", "source_ids": "SRC-001,ASM-001,ASM-003,ASM-004,ASM-005,ASM-006,ASM-007,ASM-008,ASM-009,ASM-010,ASM-011"},
             {"metric": "Theoretical minimum power", "value": minimum_power["minimum_power_kw"], "unit": "kW", "source_ids": "SRC-001"},
             {"metric": "Baseline R-134a compressor power", "value": baseline["compressor_power_kw"], "unit": "kW", "source_ids": "SRC-001,SRC-004,SRC-005"},
-            {"metric": "Selected coolant", "value": screening["selected"]["fluid"], "unit": "-", "source_ids": "SRC-003,SRC-008,ASM-017,ASM-018,ASM-019"},
+            {"metric": "Selected coolant", "value": screening["selected"]["fluid"], "unit": "-", "source_ids": "SRC-001,SRC-003,SRC-005,SRC-008,ASM-017,ASM-018,ASM-033,ASM-034,ASM-035"},
+            {"metric": "IDC coolant outlet temperature", "value": idc_after_k, "unit": "K", "source_ids": "SRC-001,ASM-035"},
+            {"metric": "IDC loop return temperature at LNG inlet", "value": return_to_lng_k, "unit": "K", "source_ids": "SRC-001,SRC-005,ASM-035"},
+            {"metric": "IDC-side HX required area", "value": idc_hx_area_m2, "unit": "m2", "source_ids": "SRC-001,ASM-033,ASM-034,ASM-035"},
+            {"metric": "IDC-side HX minimum pinch", "value": idc_hx_min_pinch_k, "unit": "K", "source_ids": "SRC-001,ASM-035"},
             {"metric": "LNG vaporizer duty", "value": q_lng_kw, "unit": "kW", "source_ids": "SRC-001,SRC-004,SRC-005,SRC-006,SRC-007"},
             {"metric": "Pipeline heat gain", "value": q_env_kw, "unit": "kW", "source_ids": "SRC-001,ASM-014,ASM-015,ASM-016"},
-            {"metric": "Available cooling at IDC", "value": available_to_idc_kw, "unit": "kW", "source_ids": "SRC-001,ASM-014,ASM-015,ASM-016"},
+            {"metric": "Supplemental warm-up duty", "value": q_supplemental_kw, "unit": "kW", "source_ids": "SRC-001,SRC-005,ASM-035"},
+            {"metric": "Available cooling at IDC", "value": available_to_idc_kw, "unit": "kW", "source_ids": "SRC-001,SRC-005,ASM-014,ASM-015,ASM-016,ASM-035"},
             {"metric": "LNG system pump power", "value": pump_kw, "unit": "kW", "source_ids": "SRC-001,ASM-014,ASM-015,ASM-016"},
             {"metric": "Equivalent cooling COP", "value": equivalent_cop, "unit": "-", "source_ids": "SRC-001,SRC-004,SRC-005"},
             {"metric": "Baseline-to-LNG power saving", "value": power_saving_kw, "unit": "kW", "source_ids": "SRC-001,SRC-004,SRC-005"},

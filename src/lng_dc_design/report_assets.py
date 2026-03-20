@@ -82,6 +82,19 @@ def _save_hx_profile(output_dir: Path, hx_result: dict) -> None:
     plt.close(fig)
 
 
+def _save_idc_hx_profile(output_dir: Path, idc_hx_result: dict) -> None:
+    profile = idc_hx_result["profile"]
+    fig, ax = plt.subplots(figsize=(7, 5))
+    ax.plot(profile["location"], profile["chilled_water_temp_k"], marker="o", label="Chilled water")
+    ax.plot(profile["location"], profile["coolant_temp_k"], marker="s", label=idc_hx_result["fluid"])
+    ax.set_ylabel("Temperature (K)")
+    ax.set_title("IDC-side Heat Exchanger Temperature Profile")
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(output_dir / "idc_hx_temperature_profile.png", dpi=180)
+    plt.close(fig)
+
+
 def _save_hx_geometry_scan(output_dir: Path, hx_result: dict) -> None:
     frame = hx_result["geometry_candidates"]
     feasible = frame[frame["feasible"]]
@@ -243,6 +256,13 @@ def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
                 "source_ids": source_map["Selected coolant"],
             },
             {
+                "requirement": "IDC-side interface heat exchanger model",
+                "status": "Complete",
+                "evidence_metric": "IDC-side HX required area",
+                "primary_output": "output/idc_hx_profile.csv; output/figures/idc_hx_temperature_profile.png; output/summary.csv",
+                "source_ids": source_map["IDC-side HX required area"],
+            },
+            {
                 "requirement": "Shell-and-tube LNG vaporizer design",
                 "status": "Complete",
                 "evidence_metric": "LNG vaporizer duty",
@@ -281,6 +301,7 @@ def write_outputs(
     minimum_power: dict,
     baseline: dict,
     screening: dict,
+    idc_hx_result: dict,
     hx_result: dict,
     pipeline_result: dict,
     scenario_result: dict,
@@ -297,6 +318,7 @@ def write_outputs(
     screening["table"].to_csv(output_dir / "fluid_ranking.csv", index=False)
     system_eval["summary"][["metric", "source_ids"]].to_csv(output_dir / "source_map.csv", index=False)
     baseline["cycle_points"].to_csv(output_dir / "baseline_cycle_points.csv", index=False)
+    idc_hx_result["profile"].to_csv(output_dir / "idc_hx_profile.csv", index=False)
     hx_result["segments"].to_csv(output_dir / "hx_segments.csv", index=False)
     hx_result["geometry_candidates"].head(100).to_csv(output_dir / "hx_geometry_candidates_top100.csv", index=False)
     pipeline_result["scan_table"].head(200).to_csv(output_dir / "pipeline_scan_top200.csv", index=False)
@@ -323,6 +345,7 @@ def write_outputs(
     _save_load_breakdown(figure_dir, load_result)
     _save_fluid_ranking(figure_dir, screening["table"])
     _save_baseline_cycle(figure_dir, baseline)
+    _save_idc_hx_profile(figure_dir, idc_hx_result)
     _save_hx_profile(figure_dir, hx_result)
     _save_hx_geometry_scan(figure_dir, hx_result)
     _save_pipeline_tradeoff(figure_dir, pipeline_result)
@@ -335,8 +358,9 @@ def write_outputs(
 
     base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
     base_distance_row = distance_scenarios.loc[base_distance_index]
+    long_distance_row = distance_scenarios.sort_values("distance_m").iloc[-1]
     feasible_supply_sweep = supply_temperature_sweep[supply_temperature_sweep["status"] == "feasible"].sort_values("pump_power_kw")
-    best_supply_row = feasible_supply_sweep.iloc[0]
+    best_supply_row = feasible_supply_sweep.iloc[0] if not feasible_supply_sweep.empty else None
     report_lines = [
         "# LNG Cold-Energy IDC Cooling System Summary",
         "",
@@ -353,19 +377,25 @@ def write_outputs(
         "## Key Design Selections",
         "",
         f"- Selected coolant score: **{screening['selected']['score']:.3f}**",
+        f"- IDC-side HX required area: **{idc_hx_result['required_area_m2']:,.1f} m2**",
+        f"- IDC-side HX minimum pinch: **{idc_hx_result['min_pinch_k']:.2f} K**",
+        f"- IDC outlet coolant temperature: **{idc_hx_result['coolant_after_idc_temp_k']:.2f} K**",
+        f"- LNG-inlet return temperature: **{hx_result['return_to_lng_temp_k']:.2f} K**",
         f"- LNG vaporizer geometry: **{int(hx_result['selected_geometry']['tube_count'])} tubes x {hx_result['selected_geometry']['tube_length_m']:.1f} m**",
         f"- LNG vaporizer shell diameter: **{hx_result['selected_geometry']['shell_diameter_m']:.3f} m**",
         f"- Pipeline IDs: **supply {pipeline_result['selected_design']['supply_id_m']:.3f} m / return {pipeline_result['selected_design']['return_id_m']:.3f} m**",
         f"- Selected insulation thickness: **{pipeline_result['selected_design']['insulation_thickness_m']:.3f} m**",
+        f"- Supplemental warm-up duty: **{pipeline_result['selected_design']['supplemental_warmup_kw']:.1f} kW**",
         "",
         "## Scenario Notes",
         "",
         f"- Base case distance: **{base_distance_row['distance_km']:.1f} km**",
-        f"- Long-distance check: **{distance_scenarios.iloc[-1]['distance_km']:.1f} km**",
-        f"- Long-distance pump power: **{distance_scenarios.iloc[-1]['pump_power_kw']:,.1f} kW**",
-        f"- Long-distance heat gain: **{distance_scenarios.iloc[-1]['heat_gain_kw']:,.1f} kW**",
-        f"- Long-distance load satisfied: **{bool(distance_scenarios.iloc[-1]['meets_idc_load'])}**",
-        f"- Long-distance interpretation: **{'Feasible' if bool(distance_scenarios.iloc[-1]['meets_idc_load']) else 'Infeasible under current duty margin'}**",
+        f"- Long-distance check: **{long_distance_row['distance_km']:.1f} km**",
+        f"- Long-distance pump power: **{long_distance_row['pump_power_kw']:,.1f} kW**",
+        f"- Long-distance heat gain: **{long_distance_row['heat_gain_kw']:,.1f} kW**",
+        f"- Long-distance supplemental warm-up: **{long_distance_row['supplemental_warmup_kw']:,.1f} kW**",
+        f"- Long-distance load satisfied: **{bool(long_distance_row['meets_idc_load'])}**",
+        f"- Long-distance interpretation: **{'Feasible' if bool(long_distance_row['meets_idc_load']) else 'Infeasible under current duty margin'}**",
         f"- Estimated maximum feasible one-way distance: **{pipeline_result['max_feasible_distance_m'] / 1000.0:,.1f} km**",
         "",
         "## Annual Impact",
@@ -378,16 +408,27 @@ def write_outputs(
         "",
         "## Temperature Sensitivity",
         "",
-        f"- Best sweep point by pump power: **{best_supply_row['supply_temp_c']:.1f} C** with **{best_supply_row['selected_fluid']}**",
-        f"- Pump power at best sweep point: **{best_supply_row['pump_power_kw']:,.1f} kW**",
-        f"- Estimated max feasible distance at best sweep point: **{best_supply_row['max_feasible_distance_km']:,.1f} km**",
+    ]
+    if best_supply_row is not None:
+        report_lines.extend(
+            [
+                f"- Best sweep point by pump power: **{best_supply_row['supply_temp_c']:.1f} C** with **{best_supply_row['selected_fluid']}**",
+                f"- Pump power at best sweep point: **{best_supply_row['pump_power_kw']:,.1f} kW**",
+                f"- Estimated max feasible distance at best sweep point: **{best_supply_row['max_feasible_distance_km']:,.1f} km**",
+            ]
+        )
+    else:
+        report_lines.append("- No feasible supply-temperature sweep point was found in the configured range.")
+    report_lines.extend(
+        [
         "",
         "## Alternative Coolants",
         "",
-    ]
+        ]
+    )
     for _, row in scenario_result["alternatives"].iterrows():
         report_lines.append(
-            f"- {row['fluid']}: pump **{row['pump_power_kw']:,.1f} kW**, shell **{row['hx_shell_diameter_m']:.3f} m**, feasible design **{bool(row['design_feasible'])}**"
+            f"- {row['fluid']}: pump **{row['pump_power_kw']:,.1f} kW**, warm-up **{row.get('supplemental_warmup_kw', 0.0):,.1f} kW**, shell **{row['hx_shell_diameter_m']:.3f} m**, feasible design **{bool(row['design_feasible'])}**"
         )
     if legacy_result and legacy_result.get("available"):
         report_lines.extend(
@@ -422,6 +463,7 @@ def write_outputs(
             "- `output/payback_allowable_capex.csv`",
             "- `output/requirement_traceability.csv`",
             "- `output/source_map.csv`",
+            "- `output/idc_hx_profile.csv`",
             "- `output/hx_segments.csv`",
             "- `output/pipeline_sensitivity.csv`",
             "- `output/figures/*.png`",

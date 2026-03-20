@@ -36,6 +36,7 @@ const colors = {
 };
 
 const figuresDir = path.resolve(__dirname, "..", "..", "output", "figures");
+const outputDir = path.resolve(__dirname, "..", "..", "output");
 const outputFile = path.resolve(__dirname, "..", "presentation_draft.pptx");
 
 function requireFigure(fileName) {
@@ -45,6 +46,96 @@ function requireFigure(fileName) {
   }
   return filePath;
 }
+
+function parseCsvLine(line) {
+  const values = [];
+  let current = "";
+  let inQuotes = false;
+  for (let idx = 0; idx < line.length; idx += 1) {
+    const ch = line[idx];
+    if (ch === '"') {
+      if (inQuotes && line[idx + 1] === '"') {
+        current += '"';
+        idx += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (ch === "," && !inQuotes) {
+      values.push(current);
+      current = "";
+    } else {
+      current += ch;
+    }
+  }
+  values.push(current);
+  return values;
+}
+
+function readCsv(fileName) {
+  const filePath = path.join(outputDir, fileName);
+  const text = fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "").trim();
+  const lines = text.split(/\r?\n/);
+  const headers = parseCsvLine(lines[0]);
+  return lines.slice(1).map((line) => {
+    const values = parseCsvLine(line);
+    return Object.fromEntries(headers.map((header, idx) => [header, values[idx] ?? ""]));
+  });
+}
+
+function toNumber(value) {
+  return Number(value);
+}
+
+function toBool(value) {
+  return String(value).toLowerCase() === "true";
+}
+
+function formatNumber(value, digits = 1) {
+  return Number(value).toLocaleString("en-US", {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+}
+
+const summaryRows = readCsv("summary.csv");
+const summary = Object.fromEntries(summaryRows.map((row) => [row.metric, row]));
+const distanceRows = readCsv("distance_scenarios.csv");
+const supplyRows = readCsv("supply_temperature_sweep.csv");
+const annualRows = readCsv("annual_summary.csv");
+const alternativeRows = readCsv("alternative_designs.csv");
+
+const longDistance = distanceRows[distanceRows.length - 1];
+const longDistanceKm = toNumber(longDistance.distance_km);
+const longDistanceMeetsLoad = toBool(longDistance.meets_idc_load);
+const maxFeasibleDistanceKm = toNumber(longDistance.max_feasible_distance_m) / 1000.0;
+const bestSupplyRow = supplyRows
+  .filter((row) => row.status === "feasible")
+  .sort((left, right) => toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw))[0];
+const recover35Row = supplyRows
+  .filter((row) => row.status === "feasible" && toBool(row.long_distance_meets_load))
+  .sort((left, right) => toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw))[0] || bestSupplyRow;
+const annualMap = Object.fromEntries(annualRows.map((row) => [row.metric, row]));
+const rankedAlternatives = alternativeRows
+  .slice()
+  .sort((left, right) => {
+    const leftFeasible = toBool(left.design_feasible);
+    const rightFeasible = toBool(right.design_feasible);
+    if (leftFeasible !== rightFeasible) {
+      return leftFeasible ? -1 : 1;
+    }
+    const pumpDiff = toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw);
+    if (Math.abs(pumpDiff) > 1e-9) {
+      return pumpDiff;
+    }
+    return toNumber(right.screening_score) - toNumber(left.screening_score);
+  });
+const feasibleAlternatives = rankedAlternatives.filter((row) => toBool(row.design_feasible));
+const selectedAlternative = feasibleAlternatives[0] || rankedAlternatives[0];
+const topAlternatives = [
+  feasibleAlternatives[0] || selectedAlternative,
+  feasibleAlternatives[1] || selectedAlternative,
+  feasibleAlternatives[2] || selectedAlternative,
+];
 
 function addBackground(slide) {
   slide.background = { color: colors.white };
@@ -442,10 +533,11 @@ function buildDeck() {
       "최종 순위는 R-717, R-290, R-600a 순으로 정리된다.",
       "암모니아는 실현 가능한 후보 중 펌프동력이 가장 낮다.",
       "프로판과 이소부탄도 후보로 남지만, 펌프동력과 전체 설계성에서 밀린다.",
+      "또한 현재 기준점에서는 상위 3개 유체 모두 LNG hot-end 조건 때문에 추가 warm-up 요구량이 남는다.",
     ], 16.5);
-    addMetricBox(slide, 7.75, 4.9, 1.45, 0.98, "1위", "R-717", "13.1 kW", colors.teal);
-    addMetricBox(slide, 9.45, 4.9, 1.45, 0.98, "2위", "R-290", "124.9 kW", colors.gold);
-    addMetricBox(slide, 11.15, 4.9, 1.45, 0.98, "3위", "R-600a", "134.5 kW", colors.red);
+    addMetricBox(slide, 7.75, 4.9, 1.45, 0.98, "1위", topAlternatives[0].fluid, `${formatNumber(toNumber(topAlternatives[0].pump_power_kw), 1)} kW`, colors.teal);
+    addMetricBox(slide, 9.45, 4.9, 1.45, 0.98, "2위", topAlternatives[1].fluid, `${formatNumber(toNumber(topAlternatives[1].pump_power_kw), 1)} kW`, colors.gold);
+    addMetricBox(slide, 11.15, 4.9, 1.45, 0.98, "3위", topAlternatives[2].fluid, `${formatNumber(toNumber(topAlternatives[2].pump_power_kw), 1)} kW`, colors.red);
     addFooterNote(slide, "후보 비교는 펌프동력, 열교환기 규모, 연간 절감까지 포함");
     finalizeSlide(slide);
   }
@@ -454,9 +546,9 @@ function buildDeck() {
   {
     const slide = pptx.addSlide();
     addSectionHeader(slide, 2, "냉각유체 선정 - 기본안 결정", page++);
-    addMetricBox(slide, 0.95, 1.55, 2.35, 1.15, "선정 유체", "R-717", "암모니아", colors.teal);
-    addMetricBox(slide, 3.55, 1.55, 2.35, 1.15, "기본 공급온도", "220 K", "코드 기준", colors.gold);
-    addMetricBox(slide, 6.15, 1.55, 2.35, 1.15, "루프 펌프동력", "13.1 kW", "최저 수준", colors.green);
+    addMetricBox(slide, 0.95, 1.55, 2.35, 1.15, "선정 유체", summary["Selected coolant"].value, "기본안", colors.teal);
+    addMetricBox(slide, 3.55, 1.55, 2.35, 1.15, "기본 공급온도", `${formatNumber(bestSupplyRow ? toNumber(bestSupplyRow.supply_temp_k) : 220.0, 0)} K`, "스윕 최적점", colors.gold);
+    addMetricBox(slide, 6.15, 1.55, 2.35, 1.15, "루프 펌프동력", `${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW`, "현재 결과", colors.green);
     addSoftBox(slide, 0.95, 3.05, 5.55, 2.65, "암모니아가 기본안인 이유", [
       "실현 가능한 후보 중 루프 동력이 가장 작다.",
       "기화기 쉘 직경이 비교적 작아 장치 규모가 과도하게 커지지 않는다.",
@@ -464,8 +556,9 @@ function buildDeck() {
     ]);
     addSoftBox(slide, 6.8, 3.05, 5.55, 2.65, "동시에 남겨둘 리스크", [
       "안전성과 취급성은 탄화수소와 다른 별도 검토가 필요하다.",
+      `현재 기준점에서는 LNG hot-end를 맞추기 위해 ${formatNumber(toNumber(summary["Supplemental warm-up duty"].value), 1)} kW의 추가 warm-up 모델이 필요하다.`,
       "따라서 최종 설계에서는 성능 우위와 안전/운전 서술을 함께 가져가야 한다.",
-      "즉 성능은 암모니아가, 커뮤니케이션 난이도는 탄화수소가 낮다.",
+      "즉 성능은 암모니아가, 시스템 단순성은 추가 검토가 더 필요하다.",
     ]);
     addFooterNote(slide, "기본안은 성능 기준, 대안 유체는 확장 시나리오 기준");
     finalizeSlide(slide);
@@ -482,7 +575,7 @@ function buildDeck() {
       "이번 모델은 112~190 K, 190~205 K, 205~220 K, 220~283 K의 4구간으로 나누어 계산한다.",
       "전 구간에서 최소 핀치 10 K를 만족하도록 설계한다.",
     ], 15.5);
-    addMetricBox(slide, 7.75, 5.0, 1.65, 0.96, "기화 duty", "14.97 MW", "LNG/NG 기준", colors.teal);
+    addMetricBox(slide, 7.75, 5.0, 1.65, 0.96, "기화 duty", `${formatNumber(toNumber(summary["LNG vaporizer duty"].value), 1)} kW`, "LNG/NG 기준", colors.teal);
     addMetricBox(slide, 9.65, 5.0, 1.45, 0.96, "구간 수", "4", "엔탈피 해석", colors.gold);
     addMetricBox(slide, 11.35, 5.0, 1.15, 0.96, "핀치", "10 K", "최소조건", colors.red);
     addFooterNote(slide, "A11의 핀치 문제 제기를 코드 기반 구간 해석으로 재현");
@@ -498,9 +591,9 @@ function buildDeck() {
       "관 수를 늘리면 길이가 줄어들지만, 일정 지점 이후 효과가 둔화된다.",
       "따라서 최소 길이만이 아니라 전체 장치 현실성으로 선택해야 한다.",
     ]);
-    addMetricBox(slide, 7.6, 4.1, 1.55, 1.02, "튜브 수", "500", "기본안", colors.teal);
-    addMetricBox(slide, 9.4, 4.1, 1.75, 1.02, "튜브 길이", "14 m", "기본안", colors.gold);
-    addMetricBox(slide, 11.4, 4.1, 1.1, 1.02, "쉘", "0.723 m", "직경", colors.red);
+    addMetricBox(slide, 7.6, 4.1, 1.55, 1.02, "튜브 수", `${Math.round(toNumber(selectedAlternative.hx_tube_count))}`, "현재 결과", colors.teal);
+    addMetricBox(slide, 9.4, 4.1, 1.75, 1.02, "튜브 길이", `${formatNumber(toNumber(selectedAlternative.hx_tube_length_m), 1)} m`, "현재 결과", colors.gold);
+    addMetricBox(slide, 11.4, 4.1, 1.1, 1.02, "쉘", `${formatNumber(toNumber(selectedAlternative.hx_shell_diameter_m), 3)} m`, "직경", colors.red);
     addSoftBox(slide, 7.5, 5.3, 5.0, 0.85, "최종 설계 요약", [
       "향류 1-pass 쉘-튜브 구조, LNG는 tube side, 2차 루프는 shell side로 두었다.",
     ]);
@@ -555,13 +648,14 @@ function buildDeck() {
     addFigure(slide, requireFigure("pipeline_distance_sensitivity.png"), 0.72, 1.45, 6.1, 4.75, "거리 증가에 따른 펌프동력과 열여유 변화");
     addBullets(slide, 7.55, 1.55, 4.9, [
       "기본 10 km에서는 충분한 열여유가 남는다.",
-      "거리 증가와 함께 열유입이 누적되며, 30 km를 넘기면 여유가 사라진다.",
-      "현재 코드 기준 최대 편도 성립거리는 약 29.6 km다.",
-      "즉 35 km는 기본안의 단순 확장으로는 성립하지 않는다.",
+      `거리 증가와 함께 열유입이 누적되며, ${formatNumber(longDistanceKm, 0)} km에서는 ${longDistanceMeetsLoad ? "아직 IDC 부하를 만족한다." : "IDC 부하 부족이 나타난다."}`,
+      `다만 현재 모델은 부족한 hot-end 환수온도를 supplemental warm-up으로 메우는 부분까지 같이 계산한다.`,
+      `현재 코드 기준 최대 편도 성립거리는 약 ${formatNumber(maxFeasibleDistanceKm, 1)} km다.`,
+      `즉 ${formatNumber(longDistanceKm, 0)} km 조건은 현재 기본안에서 ${longDistanceMeetsLoad ? "성립한다." : "불성립이다."}`,
     ], 15.8);
     addMetricBox(slide, 7.7, 5.0, 1.55, 0.95, "10 km", "성립", "기본안", colors.green);
-    addMetricBox(slide, 9.5, 5.0, 1.7, 0.95, "최대 한계", "29.6 km", "편도 추정", colors.gold);
-    addMetricBox(slide, 11.45, 5.0, 1.15, 0.95, "35 km", "불가", "기본점", colors.red);
+    addMetricBox(slide, 9.5, 5.0, 1.7, 0.95, "최대 한계", `${formatNumber(maxFeasibleDistanceKm, 1)} km`, "편도 추정", colors.gold);
+    addMetricBox(slide, 11.2, 5.0, 1.4, 0.95, `${formatNumber(longDistanceKm, 0)} km`, longDistanceMeetsLoad ? "성립" : "불가", "기본점", longDistanceMeetsLoad ? colors.green : colors.red);
     addFooterNote(slide, "이송거리가 시스템의 진짜 경계조건임을 보여주는 슬라이드");
     finalizeSlide(slide);
   }
@@ -571,15 +665,33 @@ function buildDeck() {
     const slide = pptx.addSlide();
     addSectionHeader(slide, 4, "순환 배관 설계 - 공급온도 민감도", page++);
     addFigure(slide, requireFigure("supply_temperature_sensitivity.png"), 0.72, 1.45, 6.1, 4.75, "공급온도 변화에 따른 유체 선택과 성립거리");
-    addBullets(slide, 7.55, 1.55, 4.9, [
-      "가장 효율적인 지점은 220 K 암모니아 기본안이다.",
-      "공급온도를 230 K까지 높이면 35 km 조건을 회복할 수 있다.",
-      "하지만 그 과정에서 우선 유체가 R-600a로 바뀌고 펌프동력은 크게 증가한다.",
-      "즉 거리 회복은 가능하지만 공짜는 아니다.",
-    ], 15.8);
-    addMetricBox(slide, 7.7, 5.0, 1.7, 0.95, "최적점", "220 K", "R-717", colors.teal);
-    addMetricBox(slide, 9.7, 5.0, 1.7, 0.95, "35 km 복구", "230 K", "R-600a", colors.gold);
-    addMetricBox(slide, 11.7, 5.0, 0.95, 0.95, "펌프", "130 kW", "수준", colors.red);
+    const temperatureBullets = longDistanceMeetsLoad
+      ? [
+          `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`,
+          `현재 기본안만으로도 ${formatNumber(longDistanceKm, 0)} km 조건이 성립한다.`,
+          "따라서 공급온도 스윕은 거리 복구보다 여유와 펌프동력 변화의 trade-off를 읽는 도구가 된다.",
+          "온도 수준이 바뀌면 유체 선택과 최적 거리 여유도 함께 바뀐다.",
+        ]
+      : [
+          `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`,
+          `공급온도를 ${formatNumber(recover35Row.supply_temp_k, 0)} K까지 높이면 ${formatNumber(longDistanceKm, 0)} km 조건을 회복할 수 있다.`,
+          `하지만 그 과정에서 우선 유체가 ${recover35Row.selected_fluid}로 바뀌고 펌프동력은 크게 증가한다.`,
+          "즉 거리 회복은 가능하지만 공짜는 아니다.",
+        ];
+    addBullets(slide, 7.55, 1.55, 4.9, temperatureBullets, 15.8);
+    addMetricBox(slide, 7.7, 5.0, 1.7, 0.95, "최적점", `${formatNumber(bestSupplyRow.supply_temp_k, 0)} K`, bestSupplyRow.selected_fluid.replace(" (Ammonia)", ""), colors.teal);
+    addMetricBox(
+      slide,
+      9.55,
+      5.0,
+      1.85,
+      0.95,
+      `${formatNumber(longDistanceKm, 0)} km`,
+      longDistanceMeetsLoad ? "현재 성립" : "복구 필요",
+      longDistanceMeetsLoad ? bestSupplyRow.selected_fluid.replace(" (Ammonia)", "") : recover35Row.selected_fluid.replace(" (Ammonia)", ""),
+      longDistanceMeetsLoad ? colors.green : colors.gold
+    );
+    addMetricBox(slide, 11.65, 5.0, 0.95, 0.95, "펌프", `${formatNumber(toNumber(bestSupplyRow.pump_power_kw), 0)} kW`, "최적점", colors.red);
     addFooterNote(slide, "온도 수준이 곧 거리와 유체 선택을 바꾸는 손잡이");
     finalizeSlide(slide);
   }
@@ -590,13 +702,13 @@ function buildDeck() {
     addSectionHeader(slide, 5, "열역학/경제성 평가 - 소비동력 비교", page++);
     addFigure(slide, requireFigure("system_power_comparison.png"), 0.72, 1.45, 6.0, 4.65, "이론 최소동력, 기준 시스템, LNG 시스템 비교");
     addBullets(slide, 7.5, 1.55, 5.0, [
-      "이론 최소동력은 1.22 MW, 기준 압축기 동력은 4.19 MW다.",
-      "LNG 시스템의 직접적 전력 소모는 루프 펌프 13.1 kW 수준이다.",
+      `이론 최소동력은 ${formatNumber(toNumber(summary["Theoretical minimum power"].value) / 1000.0, 2)} MW, 기준 압축기 동력은 ${formatNumber(toNumber(summary["Baseline R-134a compressor power"].value) / 1000.0, 2)} MW다.`,
+      `LNG 시스템의 직접적 전력 소모는 루프 펌프 ${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW 수준이다.`,
       "이 결과는 LNG 냉열 활용이 압축기 동력을 거의 제거하는 구조임을 보여준다.",
     ], 16);
-    addMetricBox(slide, 7.75, 4.95, 1.55, 0.95, "이론 최소", "1.22 MW", "하한", colors.gold);
-    addMetricBox(slide, 9.55, 4.95, 1.8, 0.95, "기준 시스템", "4.19 MW", "R-134a", colors.red);
-    addMetricBox(slide, 11.6, 4.95, 0.95, 0.95, "LNG", "13.1 kW", "루프", colors.green);
+    addMetricBox(slide, 7.75, 4.95, 1.55, 0.95, "이론 최소", `${formatNumber(toNumber(summary["Theoretical minimum power"].value) / 1000.0, 2)} MW`, "하한", colors.gold);
+    addMetricBox(slide, 9.55, 4.95, 1.8, 0.95, "기준 시스템", `${formatNumber(toNumber(summary["Baseline R-134a compressor power"].value) / 1000.0, 2)} MW`, "R-134a", colors.red);
+    addMetricBox(slide, 11.6, 4.95, 0.95, 0.95, "LNG", `${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW`, "루프", colors.green);
     addFooterNote(slide, "비교 경계는 기준 압축기 대비 LNG 루프 펌프동력");
     finalizeSlide(slide);
   }
@@ -606,10 +718,10 @@ function buildDeck() {
     const slide = pptx.addSlide();
     addSectionHeader(slide, 5, "열역학/경제성 평가 - 연간 효과와 회수기간", page++);
     addFigure(slide, requireFigure("annual_impact_comparison.png"), 0.72, 1.45, 5.7, 4.7, "연간 전력, 비용, 탄소 효과");
-    addMetricBox(slide, 6.75, 1.7, 2.55, 1.0, "전력 절감", "36,549", "MWh/년", colors.teal);
-    addMetricBox(slide, 9.65, 1.7, 2.65, 1.0, "비용 절감", "3,839.5", "백만원/년", colors.green);
-    addMetricBox(slide, 6.75, 3.05, 2.55, 1.0, "회피 배출", "16,757.7", "tCO2/년", colors.gold);
-    addMetricBox(slide, 9.65, 3.05, 2.65, 1.0, "5년 허용 CAPEX", "19,197.4", "백만원", colors.red);
+    addMetricBox(slide, 6.75, 1.7, 2.55, 1.0, "전력 절감", formatNumber(toNumber(annualMap["Electricity saving"].value), 1), "MWh/년", colors.teal);
+    addMetricBox(slide, 9.65, 1.7, 2.65, 1.0, "비용 절감", formatNumber(toNumber(annualMap["Electricity cost saving"].value) / 1_000_000.0, 1), "백만원/년", colors.green);
+    addMetricBox(slide, 6.75, 3.05, 2.55, 1.0, "회피 배출", formatNumber(toNumber(annualMap["Avoided indirect emissions"].value), 1), "tCO2/년", colors.gold);
+    addMetricBox(slide, 9.65, 3.05, 2.65, 1.0, "5년 허용 CAPEX", formatNumber(toNumber(summary["Allowable incremental CAPEX at 5-year payback"].value) / 1_000_000.0, 1), "백만원", colors.red);
     addSoftBox(slide, 6.75, 4.5, 5.55, 1.15, "해석 범위", [
       "현재 연간 효과는 기준 압축기 동력과 LNG 루프 펌프동력만 비교한 경계조건 결과다.",
     ]);
@@ -629,12 +741,12 @@ function buildDeck() {
       "이번 코드 v1은 순수 메탄 가정과 단순화된 IDC 경계조건을 사용했다.",
     ]);
     addSoftBox(slide, 4.82, 1.45, 3.8, 4.95, "35 km를 정말 목표로 할 경우", [
-      "공급온도 수준 조정",
-      "유체 변경(R-600a 방향)",
-      "펌프동력 증가 수용",
+      longDistanceMeetsLoad ? "현재 기본안으로도 35 km가 이미 성립한다." : "공급온도 수준 조정",
+      longDistanceMeetsLoad ? "다만 추가 거리 여유 확보는 별도 최적화 문제다." : "유체 변경(R-600a 방향)",
+      longDistanceMeetsLoad ? "열유입 여유와 펌프동력 증가는 계속 trade-off다." : "펌프동력 증가 수용",
       "배관/단열 재최적화",
       "",
-      "즉 35 km는 기본안이 아니라 별도 설계 과제로 보는 편이 타당하다.",
+      longDistanceMeetsLoad ? "즉 35 km는 이제 기준안의 성립 영역 안에 들어오지만, 그 이상 확장은 여전히 설계 과제다." : "즉 35 km는 기본안이 아니라 별도 설계 과제로 보는 편이 타당하다.",
     ]);
     addSoftBox(slide, 8.82, 1.45, 3.68, 4.95, "발표에서 말하면 좋은 점", [
       "안 되는 조건도 설계 결론이다.",
@@ -697,12 +809,12 @@ function buildDeck() {
       "즉 성능과 설계성 모두에서 현재 가장 균형이 좋다.",
     ]);
     addSoftBox(slide, 8.65, 1.8, 3.55, 3.25, "결론 3", [
-      "35 km는 기본안의 단순 연장이 아니라 별도 최적화가 필요한 확장 조건이다.",
-      "따라서 이번 프로젝트의 진짜 메시지는 ‘가능/불가능의 경계’를 찾았다는 데 있다.",
+      longDistanceMeetsLoad ? "IDC 측 HX와 LNG hot-end 제약을 함께 풀면 35 km도 현재 기본안에서 성립한다." : "35 km는 기본안의 단순 연장이 아니라 별도 최적화가 필요한 확장 조건이다.",
+      longDistanceMeetsLoad ? "따라서 이번 재구축의 메시지는 기존보다 완화된 실제 성립영역을 재계산했다는 데 있다." : "따라서 이번 프로젝트의 진짜 메시지는 ‘가능/불가능의 경계’를 찾았다는 데 있다.",
     ]);
     addMetricBox(slide, 1.25, 5.55, 2.8, 1.02, "기본안", "10 km 성립", "LNG 냉열 활용", colors.green);
-    addMetricBox(slide, 4.45, 5.55, 2.8, 1.02, "경계조건", "29.6 km", "추정 편도 한계", colors.gold);
-    addMetricBox(slide, 7.65, 5.55, 4.3, 1.02, "확장 판단", "35 km는 운전점 변경 필요", "기본안 불성립", colors.red);
+    addMetricBox(slide, 4.45, 5.55, 2.8, 1.02, "경계조건", `${formatNumber(maxFeasibleDistanceKm, 1)} km`, "추정 편도 한계", colors.gold);
+    addMetricBox(slide, 7.65, 5.55, 4.3, 1.02, "확장 판단", `${formatNumber(longDistanceKm, 0)} km ${longDistanceMeetsLoad ? "기본안 성립" : "운전점 변경 필요"}`, longDistanceMeetsLoad ? "현재 설계 가능" : "기본안 불성립", longDistanceMeetsLoad ? colors.green : colors.red);
     addPageNumber(slide, page++);
     addFooterNote(slide, "A11 스타일의 장문형 발표 흐름으로 재구성한 최종 장표");
     finalizeSlide(slide);

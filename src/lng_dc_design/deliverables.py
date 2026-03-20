@@ -109,10 +109,11 @@ def _build_report_front_matter(ctx: dict[str, object]) -> list[str]:
             f"연간 전력 절감은 **{ctx['annual_saving_mwh']} MWh/년**, "
             f"연간 비용 절감은 **{ctx['annual_cost_saving_mkrw']} 백만원/년**, "
             f"연간 회피 배출은 **{ctx['annual_avoided_tco2']} tCO2/년**으로 평가되었다. "
-            f"기본 10 km 설계는 성립하지만, 현재 운전점에서의 추정 최대 성립거리는 약 **{ctx['max_distance_km']} km**로 35 km 조건은 불성립이었다."
+            f"현재 운전점에서의 추정 최대 성립거리는 약 **{ctx['max_distance_km']} km**이며, "
+            f"35 km 조건은 **{ctx['long_distance_status']}**으로 판정되었다."
         ),
         "",
-        _source_note("SRC-001,SRC-004,SRC-005,SRC-006,SRC-007,SRC-008,SRC-010,SRC-013,SRC-014,ASM-019,ASM-020,ASM-032"),
+        _source_note("SRC-001,SRC-004,SRC-005,SRC-006,SRC-007,SRC-008,SRC-010,SRC-013,SRC-014,ASM-020,ASM-032,ASM-033,ASM-034,ASM-035"),
         "",
         "## 1. 서론",
         "",
@@ -155,7 +156,7 @@ def _build_report_front_matter(ctx: dict[str, object]) -> list[str]:
             "설계 자동화를 위해 반드시 필요한 기본값들이다."
         ),
         "",
-        _source_note("SRC-001,ASM-001,ASM-007,ASM-014,ASM-015,ASM-019,ASM-020,ASM-024,ASM-025,ASM-027,ASM-028"),
+        _source_note("SRC-001,ASM-001,ASM-007,ASM-014,ASM-015,ASM-019,ASM-020,ASM-024,ASM-025,ASM-027,ASM-028,ASM-029,ASM-033,ASM-034,ASM-035"),
         "",
         "## 3. 수학적 모델",
         "",
@@ -265,38 +266,48 @@ def _build_report_model_sections(ctx: dict[str, object]) -> list[str]:
             "",
             _source_note(str(ctx["baseline_source_ids"])),
             "",
-            "### 3.4 냉각유체 스크리닝",
+            "### 3.4 냉각유체 스크리닝과 IDC 측 열교환기",
             "",
             (
                 "2차 루프 냉각유체 후보는 R-170, R-717, R-744, R-1270, R-290, R-600a, R-1150으로 두었다. "
-                "후보는 1 MPa 루프 압력에서 단상 액체 여부, 삼중점 여유, 요구 질량유량과 점도, 안전성 패널티를 기준으로 정렬했다."
+                "후보는 1 MPa 루프 압력에서 단상 액체 여부, 삼중점 여유, IDC 측 열교환기 성립성, 요구 질량유량과 점도, 안전성 패널티를 기준으로 정렬했다."
             ),
             "",
         ]
     )
     lines.extend(
         _math_block(
-            r"\dot Q_{\mathrm{LNG}} = \frac{\dot Q_{\mathrm{IDC}}}{f_{\mathrm{util}}}",
-            r"\dot m_{\mathrm{loop}} = \frac{\dot Q_{\mathrm{LNG}}}{c_p \left(T_{\mathrm{after\ IDC}} - T_{\mathrm{supply}}\right)}",
+            r"T_{\mathrm{after\ IDC}} = T_{\mathrm{cw,r}} - \Delta T_{\min}",
             r"\dot V_{\mathrm{loop}} = \frac{\dot m_{\mathrm{loop}}}{\rho}",
+            r"\dot m_{\mathrm{loop}} = \frac{\dot Q_{\mathrm{IDC}}}{h\!\left(T_{\mathrm{after\ IDC}}, P\right) - h\!\left(T_{\mathrm{supply}}, P\right)}",
+            r"\phi_{\mathrm{target}} = 0.90",
+            r"\dot Q_{\mathrm{LNG,target}} = \frac{\dot Q_{\mathrm{IDC}}}{\phi_{\mathrm{target}}}",
+            r"\dot Q_{\mathrm{pipe,max}} = \dot Q_{\mathrm{LNG,target}} - \dot Q_{\mathrm{IDC}}",
+            r"T_{\mathrm{return,min}} = T_{\mathrm{NG,out}} + \Delta T_{\min}",
+            r"\dot Q_{\mathrm{LNG,min}} = \dot m_{\mathrm{loop}} \left(h\!\left(T_{\mathrm{return,min}}, P\right) - h\!\left(T_{\mathrm{supply}}, P\right)\right)",
+            r"\dot Q_{\mathrm{pipe,min}} = \dot Q_{\mathrm{LNG,min}} - \dot Q_{\mathrm{IDC}}",
+            r"A_{\mathrm{IDC}} = \frac{\dot Q_{\mathrm{IDC}}}{U_{\mathrm{IDC}}\Delta T_{\mathrm{lm,IDC}}}",
             r"I_{\mathrm{transport}} = \dot m_{\mathrm{loop}} \frac{\mu}{\rho}",
-            r"S = 1 - 0.45 m_{\mathrm{norm}} - 0.30 \dot V_{\mathrm{norm}} - 0.15 I_{\mathrm{norm}} - P_{\mathrm{safety}} - P_{\mathrm{compat}} - 0.05 \min\left(\frac{GWP}{1000}, 1\right)",
+            r"S = 1 - 0.35 m_{\mathrm{norm}} - 0.20 \dot V_{\mathrm{norm}} - 0.10 I_{\mathrm{norm}} - 0.10 \dot Q_{\mathrm{pipe,min,norm}} - 0.05 A_{\mathrm{IDC,norm}} + 0.10 M_{\mathrm{window,norm}} - 0.15 Q_{\mathrm{shortfall,norm}} - P_{\mathrm{safety}} - P_{\mathrm{compat}}",
         )
     )
     lines.extend(
         [
-            "마지막 점수식은 열역학 성능과 실무 리스크를 함께 반영하기 위한 휴리스틱이며, 후보군 상대 비교 도구로 사용했다.",
+            "즉, 이번 스크리닝은 먼저 IDC 측 열교환기에서 요구 질량유량을 계산한 뒤, 90% 이용률 목표가 허용하는 배관 열유입 상한과 LNG hot-end가 요구하는 최소 환수온도 조건을 함께 계산한다. 이후 그 창(window) 안에 드는 후보를 우선하고, 부족분이 남는 경우에는 supplemental warm-up 요구량으로 별도 추적한다.",
             "",
             str(ctx["alternatives_md"]),
             "",
             (
                 f"기본 설계점에서 최상위 유체는 **{ctx['selected_coolant']}**였고, 요구 질량유량은 "
-                f"**{ctx['selected_mass_flow']} kg/s**였다."
+                f"**{ctx['selected_mass_flow']} kg/s**였다. 또한 IDC 측 열교환기의 요구 면적은 **{ctx['idc_hx_area_m2']} m2**, "
+                f"IDC 출구 냉각유체 온도는 **{ctx['idc_after_temp_c']} °C**, LNG 입구 환수온도는 **{ctx['idc_return_temp_c']} °C**로 계산되었다."
             ),
+            "",
+            "![IDC 측 열교환기 온도 프로파일](../output/figures/idc_hx_temperature_profile.png)",
             "",
             "![냉각유체 후보 비교](../output/figures/fluid_ranking.png)",
             "",
-            _source_note("SRC-003,SRC-008,ASM-017,ASM-018,ASM-019"),
+            _source_note("SRC-001,SRC-003,SRC-005,SRC-008,ASM-017,ASM-018,ASM-033,ASM-034,ASM-035"),
             "",
             "### 3.5 LNG 기화기 상세설계",
             "",
@@ -353,7 +364,7 @@ def _build_report_model_sections(ctx: dict[str, object]) -> list[str]:
     )
     lines.extend(
         [
-            "배관 스캔의 목적함수는 `열유입 목표와의 차이 + 펌프동력 가중합` 형태의 휴리스틱으로 두었다.",
+            "배관 스캔은 펌프동력과 ambient heat gain을 직접 계산하고, LNG hot-end가 요구하는 최소 환수온도에 못 미치는 경우에는 supplemental warm-up 요구량을 함께 산정한다. 따라서 현재 모델의 장거리 성립성은 단순 열손실이 아니라 `펌프동력 + ambient pickup + 추가 warm-up`의 결합 문제로 읽는다.",
             "",
             str(ctx["pipeline_design_md"]),
             "",
@@ -406,7 +417,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         "",
         (
             f"후보군 비교 결과, 기본안은 **{ctx['selected_coolant']}**로 결정되었다. "
-            "이는 루프 질량유량, 장거리 배관 동력, 기화기 형상, 환경성, 안전성 패널티를 동시에 고려한 결과다."
+            f"이는 루프 질량유량, IDC 측 HX 면적 **{ctx['idc_hx_area_m2']} m2**, 장거리 배관 동력, 기화기 형상, 환경성, 안전성 패널티를 동시에 고려한 결과다."
         ),
         "",
         str(ctx["alternatives_md"]),
@@ -433,10 +444,10 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         "",
         (
             f"거리 증가에 따라 열유입이 거의 선형적으로 증가하면서, 현재 운전점에서의 추정 최대 편도 성립거리는 **{ctx['max_distance_km']} km**로 나타났다. "
-            f"따라서 **{ctx['long_distance_km']} km** 조건은 기본안의 단순 확장만으로는 **{ctx['long_distance_status']}**이다."
+            f"따라서 **{ctx['long_distance_km']} km** 조건은 기본안의 단순 확장만으로는 **{ctx['long_distance_status']} 판정**을 받는다."
         ),
         "",
-        "### 4.5 공급온도 민감도와 35 km 복구 가능성",
+        "### 4.5 공급온도 민감도와 35 km 해석",
         "",
         str(ctx["temperature_md"]),
         "",
@@ -473,14 +484,11 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         ),
         "",
         (
-            "둘째, 이번 프로젝트의 진짜 설계 통찰은 '35 km가 안 된다'는 사실 자체다. "
-            f"이번 결과는 현재 기본안의 경계가 약 **{ctx['max_distance_km']} km**라는 점을 정량적으로 보여준다."
+            "둘째, 이번 프로젝트의 진짜 설계 통찰은 35 km 조건의 판정이 운전점과 열수지 가정에 따라 달라질 만큼 민감하다는 사실이다. "
+            f"이번 결과는 현재 기본안의 경계가 약 **{ctx['max_distance_km']} km**라는 점을 정량적으로 보여준다. {ctx['long_distance_discussion']}"
         ),
         "",
-        (
-            "셋째, 35 km는 절대 불가능한 조건이 아니라 기본안의 단순 연장으로는 불가능한 조건이다. "
-            "즉, 운전점과 유체 선택을 바꾸면 회복 가능할 수도 있지만, 그 대가로 펌프동력과 설계 복잡성이 증가한다."
-        ),
+        (ctx["long_distance_extension_text"]),
         "",
         (
             "넷째, 등가 COP와 연간 절감량은 매우 크지만, 현 단계의 경제성 경계는 압축기 동력 대 펌프동력 비교에 한정되어 있다."
@@ -501,7 +509,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
             f"10 km 기본 설계점에서 충분히 성립함을 보였다. 선정된 기본안은 **{ctx['selected_coolant']}**를 2차 루프 유체로 사용하고, "
             f"기화기 duty **{ctx['lng_duty_kw']} kW**, 루프 펌프동력 **{ctx['pump_power_kw']} kW**, "
             f"배관 열유입 **{ctx['pipeline_heat_gain_kw']} kW**의 수준에서 IDC 부하를 충족한다. "
-            f"반면 35 km 조건은 기본안에서 불성립이며, 현재 경계는 약 **{ctx['max_distance_km']} km**다."
+            f"현재 경계는 약 **{ctx['max_distance_km']} km**이며, 35 km 조건은 **{ctx['long_distance_status']} 판정**으로 정리되었다."
         ),
         "",
         "## 부록 A. 출처 레지스트리",
@@ -576,6 +584,7 @@ def build_report(project_root: Path) -> Path:
             "유체": alternatives["fluid"],
             "스크리닝 점수": alternatives["screening_score"].map(lambda x: _format_number(x, 3)),
             "펌프동력 (kW)": alternatives["pump_power_kw"].map(_format_number),
+            "추가 warm-up (kW)": alternatives["supplemental_warmup_kw"].map(_format_number),
             "쉘 직경 (m)": alternatives["hx_shell_diameter_m"].map(lambda x: _format_number(x, 3)),
             "연간 비용절감 (백만원/년)": alternatives["annual_cost_saving_krw"].map(
                 lambda x: _format_number(x / 1_000_000.0)
@@ -587,6 +596,7 @@ def build_report(project_root: Path) -> Path:
             "거리 (km)": distance["distance_km"].map(_format_number),
             "펌프동력 (kW)": distance["pump_power_kw"].map(_format_number),
             "열유입 (kW)": distance["heat_gain_kw"].map(_format_number),
+            "추가 warm-up (kW)": distance["supplemental_warmup_kw"].map(_format_number),
             "열여유 (kW)": distance["thermal_margin_kw"].map(_format_number),
             "IDC 부하 충족": distance["meets_idc_load"].map(lambda x: "예" if bool(x) else "아니오"),
         }
@@ -682,8 +692,8 @@ def build_report(project_root: Path) -> Path:
 
     load_table_md = _markdown_table(load_table, ["부하 항목", "열부하 (kW)", "비중 (%)"])
     input_conditions_md = _markdown_table(input_conditions_table, ["항목", "값", "출처 ID"])
-    alternatives_md = _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "펌프동력 (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"])
-    distance_md = _markdown_table(distance_table, ["거리 (km)", "펌프동력 (kW)", "열유입 (kW)", "열여유 (kW)", "IDC 부하 충족"])
+    alternatives_md = _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "펌프동력 (kW)", "추가 warm-up (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"])
+    distance_md = _markdown_table(distance_table, ["거리 (km)", "펌프동력 (kW)", "열유입 (kW)", "추가 warm-up (kW)", "열여유 (kW)", "IDC 부하 충족"])
     temperature_md = _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "펌프동력 (kW)", "최대 성립거리 (km)", "35 km 충족", "상태"])
     annual_md = _markdown_table(annual_report, ["항목", "값", "단위"])
     payback_md = _markdown_table(
@@ -718,6 +728,7 @@ def build_report(project_root: Path) -> Path:
                 {"설계 변수": "환수관 내경", "값": f"{selected_alternative['pipeline_return_id_m']:.3f} m"},
                 {"설계 변수": "단열 두께", "값": f"{selected_alternative['pipeline_insulation_thickness_m']:.3f} m"},
                 {"설계 변수": "배관 열유입", "값": f"{_format_number(selected_alternative['pipeline_heat_gain_kw'])} kW"},
+                {"설계 변수": "추가 warm-up", "값": f"{_format_number(selected_alternative['supplemental_warmup_kw'])} kW"},
                 {"설계 변수": "루프 펌프동력", "값": f"{_format_number(selected_alternative['pump_power_kw'])} kW"},
                 {"설계 변수": "공급관 속도", "값": f"{_format_number(selected_pipeline['velocity_supply_m_per_s'], 3)} m/s"},
                 {"설계 변수": "환수관 속도", "값": f"{_format_number(selected_pipeline['velocity_return_m_per_s'], 3)} m/s"},
@@ -734,8 +745,12 @@ def build_report(project_root: Path) -> Path:
                 {"항목": "이론 최소동력", "값": f"{_format_number(float(summary['Theoretical minimum power']['value']))} kW"},
                 {"항목": "기준 압축기 동력", "값": f"{_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW"},
                 {"항목": "선정 냉각유체", "값": str(summary["Selected coolant"]["value"])},
+                {"항목": "IDC 측 HX 면적", "값": f"{_format_number(float(summary['IDC-side HX required area']['value']))} m2"},
+                {"항목": "IDC 출구 냉각유체 온도", "값": f"{_format_celsius(float(summary['IDC coolant outlet temperature']['value']))} °C"},
+                {"항목": "LNG 유입 환수온도", "값": f"{_format_celsius(float(summary['IDC loop return temperature at LNG inlet']['value']))} °C"},
                 {"항목": "LNG 기화 duty", "값": f"{_format_number(float(summary['LNG vaporizer duty']['value']))} kW"},
                 {"항목": "배관 열유입", "값": f"{_format_number(float(summary['Pipeline heat gain']['value']))} kW"},
+                {"항목": "추가 warm-up", "값": f"{_format_number(float(summary['Supplemental warm-up duty']['value']))} kW"},
                 {"항목": "IDC 도달 가능 냉량", "값": f"{_format_number(float(summary['Available cooling at IDC']['value']))} kW"},
                 {"항목": "루프 펌프동력", "값": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
                 {"항목": "등가 냉각 COP", "값": _format_number(float(summary['Equivalent cooling COP']['value']), 1)},
@@ -763,7 +778,12 @@ def build_report(project_root: Path) -> Path:
         ["ID", "가정", "값", "설정 이유"],
     )
 
-    if not recover_35km.empty:
+    if bool(long_distance["meets_idc_load"]):
+        recover_35km_text = (
+            f"현재 기본안 자체가 **{int(long_distance['distance_km'])} km** 조건을 이미 만족하므로, "
+            "공급온도 스윕은 복구 목적이 아니라 추가 여유와 펌프동력 변화의 trade-off를 읽기 위한 분석으로 해석된다."
+        )
+    elif not recover_35km.empty:
         recover_row = recover_35km.iloc[0]
         recover_35km_text = (
             f"추가로, 공급온도를 **{recover_row['supply_temp_c']:.1f} °C**까지 높이면 "
@@ -772,6 +792,26 @@ def build_report(project_root: Path) -> Path:
         )
     else:
         recover_35km_text = "공급온도 스윕 범위 안에서는 35 km 조건을 만족하는 운전점이 발견되지 않았다."
+
+    if bool(long_distance["meets_idc_load"]):
+        long_distance_discussion = (
+            f"특히 현재 기본안 자체가 **{int(long_distance['distance_km'])} km** 조건도 이미 충족한다는 점은, "
+            "기존 프로젝트의 보수적 duty 가정이 실제보다 제한적이었을 가능성을 보여준다."
+        )
+        long_distance_extension_text = (
+            "셋째, 이번 모델에서는 35 km가 별도 운전점 변경 없이도 성립했다. "
+            "즉, IDC 측 HX 제약과 LNG hot-end 제약을 동시에 반영한 뒤 총 duty를 다시 계산하면, "
+            "장거리 조건의 해석이 기존보다 훨씬 완화될 수 있음을 확인했다."
+        )
+    else:
+        long_distance_discussion = (
+            f"특히 **{int(long_distance['distance_km'])} km** 조건이 아직 불성립이라는 사실은, "
+            "장거리 설계가 열유입 여유와 루프 온도 수준에 매우 민감함을 보여준다."
+        )
+        long_distance_extension_text = (
+            "셋째, 35 km는 절대 불가능한 조건이 아니라 기본안의 단순 연장으로는 불가능한 조건이다. "
+            "즉, 운전점과 유체 선택을 바꾸면 회복 가능할 수도 있지만, 그 대가로 펌프동력과 설계 복잡성이 증가한다."
+        )
 
     ctx: dict[str, object] = {
         "input_conditions_md": input_conditions_md,
@@ -800,6 +840,9 @@ def build_report(project_root: Path) -> Path:
         "annual_avoided_tco2": _format_number(float(summary["Annual avoided indirect emissions"]["value"])),
         "equivalent_cop": _format_number(float(summary["Equivalent cooling COP"]["value"]), 1),
         "max_distance_km": _format_number(distance["max_feasible_distance_m"].iloc[0] / 1000.0),
+        "idc_hx_area_m2": _format_number(float(summary["IDC-side HX required area"]["value"])),
+        "idc_after_temp_c": _format_celsius(float(summary["IDC coolant outlet temperature"]["value"])),
+        "idc_return_temp_c": _format_celsius(float(summary["IDC loop return temperature at LNG inlet"]["value"])),
         "chilled_mean_c": _format_celsius(0.5 * (config["assignment"]["chilled_water_supply_temp_k"] + config["assignment"]["chilled_water_return_temp_k"])),
         "ambient_c": _format_celsius(config["assignment"]["ambient_air_temp_k"]),
         "load_source_ids": summary["IDC total cooling load"]["source_ids"],
@@ -817,6 +860,8 @@ def build_report(project_root: Path) -> Path:
         "ng_outlet_k": f"{config['assignment']['ng_outlet_temp_k']:.1f}",
         "long_distance_km": int(long_distance["distance_km"]),
         "long_distance_status": "성립" if bool(long_distance["meets_idc_load"]) else "불성립",
+        "long_distance_discussion": long_distance_discussion,
+        "long_distance_extension_text": long_distance_extension_text,
         "best_supply_temp_c": _format_number(best_temp["supply_temp_c"]),
         "best_supply_fluid": best_temp["selected_fluid"],
         "recover_35km_text": recover_35km_text,
@@ -923,7 +968,7 @@ def build_presentation_script(project_root: Path) -> Path:
         "",
         "## 슬라이드 17. 추가 고려 사항 - 확장 과제",
         "- 실제 LNG 조성, IDC 냉수 네트워크, 장거리 조건의 제어 전략이 후속 과제라고 정리한다.",
-        "- 35 km는 기본안의 연장이 아니라 별도 최적화 과제라고 말한다.",
+        f"- 현재 기본안에서 {int(long_distance['distance_km'])} km 조건은 {'이미 성립' if bool(long_distance['meets_idc_load']) else '아직 불성립'}이라고 정리하고, 그 이유를 IDC 측 HX와 총 duty 관점에서 설명한다.",
         "",
         "## 슬라이드 18. 추가 고려 사항 - 출처 체계와 재현성",
         "- config, sources, assumptions, output, deliverables가 하나의 저장소 안에서 연결된 구조라고 설명한다.",
@@ -931,9 +976,9 @@ def build_presentation_script(project_root: Path) -> Path:
         "",
         "## 슬라이드 19. 결론",
         "- 10 km LNG 냉열 설계는 기술적으로 성립하고 에너지 측면에서 매우 매력적이라고 결론낸다.",
-        "- 동시에 35 km는 운전점 변경 없이는 기본안으로 성립하지 않는 경계조건이라고 정리한다.",
+        f"- 동시에 {int(long_distance['distance_km'])} km 조건은 현재 기본안에서 {'성립' if bool(long_distance['meets_idc_load']) else '불성립'}이며, 추정 최대 편도 성립거리는 약 {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km라고 정리한다.",
     ]
-    if not high_temp.empty:
+    if (not bool(long_distance["meets_idc_load"])) and (not high_temp.empty):
         row = high_temp.iloc[0]
         script_lines.insert(
             script_lines.index("## 슬라이드 15. 열역학/경제성 평가 - 소비동력 비교") - 1,

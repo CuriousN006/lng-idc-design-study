@@ -32,12 +32,15 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
     m_lng = q_total_w / (h_lng[-1] - h_lng[0])
     q_segments = [m_lng * (h_lng[i + 1] - h_lng[i]) for i in range(len(cold_bounds) - 1)]
 
-    h_hot_in = float(CP.PropsSI("H", "T", loop["return_to_lng_temp_k"], "P", pressure_pa, fluid))
+    return_to_lng_temp_k = float(selected_fluid.get("return_to_lng_temp_k", loop["return_to_lng_temp_k"]))
+    after_idc_temp_k = float(selected_fluid.get("after_idc_temp_k", loop["after_idc_temp_k"]))
+
+    h_hot_in = float(CP.PropsSI("H", "T", return_to_lng_temp_k, "P", pressure_pa, fluid))
     h_hot_out = float(CP.PropsSI("H", "T", loop["supply_temp_k"], "P", pressure_pa, fluid))
-    m_hot = q_total_w / max(h_hot_in - h_hot_out, 1.0)
+    m_hot = float(selected_fluid.get("required_mass_flow_kg_s", q_total_w / max(h_hot_in - h_hot_out, 1.0)))
 
     hot_at_boundaries = [0.0] * len(cold_bounds)
-    hot_at_boundaries[-1] = loop["return_to_lng_temp_k"]
+    hot_at_boundaries[-1] = return_to_lng_temp_k
     current_h = h_hot_in
     for segment_idx in range(len(q_segments) - 1, -1, -1):
         current_h -= q_segments[segment_idx] / m_hot
@@ -119,7 +122,7 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
                 provided_area_m2 >= required_area_m2
                 and tube_velocity_max <= hx_cfg["max_liquid_velocity_m_per_s"]
                 and shell_velocity_max <= hx_cfg["max_liquid_velocity_m_per_s"]
-                and min_pinch >= assignment["minimum_temperature_approach_k"]
+                and min_pinch >= assignment["minimum_temperature_approach_k"] - 1e-6
             )
             candidate_rows.append(
                 {
@@ -164,6 +167,8 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
         "m_coolant_kg_s": m_hot,
         "hot_boundaries_k": hot_at_boundaries,
         "cold_boundaries_k": cold_bounds,
+        "after_idc_temp_k": after_idc_temp_k,
+        "return_to_lng_temp_k": return_to_lng_temp_k,
         "pinch_values_k": pinch_values,
         "min_pinch_k": min_pinch,
         "geometry_candidates": candidates,
