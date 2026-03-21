@@ -104,16 +104,19 @@ def _build_report_front_matter(ctx: dict[str, object]) -> list[str]:
             f"기준 R-134a 증기압축 시스템의 압축기 동력은 **{ctx['baseline_power_kw']} kW**로 산정되었다. "
             f"이에 비해 LNG 냉열 기반 시스템은 **{ctx['selected_coolant']}**를 2차 루프 냉각유체로 사용할 때 "
             f"LNG 기화 duty **{ctx['lng_duty_kw']} kW**, 배관 열유입 **{ctx['pipeline_heat_gain_kw']} kW**, "
-            f"루프 펌프동력 **{ctx['pump_power_kw']} kW**의 설계가 가능했다. "
+            f"LNG 순환펌프 **{ctx['lng_loop_pump_kw']} kW**와 IDC 2차 루프 펌프 **{ctx['idc_secondary_pump_kw']} kW**를 포함한 "
+            f"핵심 전동부하 **{ctx['core_power_kw']} kW**의 설계가 가능했다. "
             f"그 결과 기준 시스템 대비 전력 절감은 **{ctx['power_saving_kw']} kW**, "
             f"연간 전력 절감은 **{ctx['annual_saving_mwh']} MWh/년**, "
             f"연간 비용 절감은 **{ctx['annual_cost_saving_mkrw']} 백만원/년**, "
             f"연간 회피 배출은 **{ctx['annual_avoided_tco2']} tCO2/년**으로 평가되었다. "
+            f"대표 혼합 LNG는 **{ctx['lng_stream_model']}**으로 모델링했고, "
+            f"핵심 설비 CAPEX는 **{ctx['core_capex_bkrw']} 십억원**, NPV는 **{ctx['core_npv_bkrw']} 십억원**으로 추정되었다. "
             f"현재 운전점에서의 추정 최대 성립거리는 약 **{ctx['max_distance_km']} km**이며, "
             f"35 km 조건은 **{ctx['long_distance_status']}**으로 판정되었다."
         ),
         "",
-        _source_note("SRC-001,SRC-004,SRC-005,SRC-006,SRC-007,SRC-008,SRC-010,SRC-013,SRC-014,ASM-020,ASM-032,ASM-033,ASM-034,ASM-035"),
+        _source_note("SRC-001,SRC-004,SRC-005,SRC-006,SRC-007,SRC-008,SRC-010,SRC-013,SRC-014,SRC-019,SRC-020,SRC-021,SRC-022,SRC-023,SRC-024,SRC-025,ASM-020,ASM-033,ASM-034,ASM-035,ASM-055,ASM-056,ASM-057,ASM-058,ASM-059,ASM-060,ASM-061,ASM-062,ASM-063,ASM-064,ASM-065,ASM-066,ASM-067,ASM-068,ASM-069"),
         "",
         "## 1. 서론",
         "",
@@ -376,7 +379,8 @@ def _build_report_model_sections(ctx: dict[str, object]) -> list[str]:
             "",
             (
                 "연간화는 데이터센터의 상시 운전을 반영해 8,760시간/년 기준으로 수행했다. "
-                "전력요금과 전력 배출계수는 공식 자료를 기준으로 입력했으며, v1에서는 기준 압축기 동력과 LNG 루프 펌프동력만을 비교 경계로 삼았다."
+                "전력요금과 전력 배출계수는 공식 자료를 기준으로 입력했고, 현재 버전에서는 LNG 외부 루프 펌프와 IDC 2차 루프 펌프를 합한 "
+                "core LNG system power를 기준 압축기 동력과 비교했다. 또한 설치비, 연간 O&M, 할인율을 포함한 NPV/IRR을 함께 계산했다."
             ),
             "",
         ]
@@ -387,11 +391,14 @@ def _build_report_model_sections(ctx: dict[str, object]) -> list[str]:
             r"C_{\mathrm{year}} = P \cdot t_{\mathrm{op}} \cdot c_e",
             r"M_{\mathrm{CO_2}} = E_{\mathrm{year}} \cdot EF_{\mathrm{grid}}",
             r"CAPEX_{\mathrm{allow}} = \Delta C_{\mathrm{year}} \cdot N_{\mathrm{payback}}",
+            r"CF_{\mathrm{net}} = \Delta C_{\mathrm{year}} - f_{\mathrm{O\&M}} \cdot CAPEX",
+            r"NPV = -CAPEX + \sum_{t=1}^{N}\frac{CF_{\mathrm{net}}}{(1+r)^t}",
+            r"IRR:\ 0 = -CAPEX + \sum_{t=1}^{N}\frac{CF_{\mathrm{net}}}{(1+IRR)^t}",
         )
     )
     lines.extend(
         [
-            _source_note("SRC-013,SRC-014,ASM-030,ASM-031,ASM-032"),
+            _source_note("SRC-013,SRC-014,SRC-021,SRC-022,SRC-023,SRC-024,SRC-025,ASM-030,ASM-031,ASM-057,ASM-058,ASM-059,ASM-060,ASM-061,ASM-062,ASM-063,ASM-064,ASM-065,ASM-066,ASM-067,ASM-068"),
             "",
         ]
     )
@@ -518,17 +525,18 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         (ctx["practical_passive_text"]),
         "",
         (
-            "다섯째, 등가 COP와 연간 절감량은 매우 크지만, 현 단계의 경제성 경계는 압축기 동력 대 펌프동력 비교에 한정되어 있다."
+            "다섯째, 혼합 LNG와 IDC 2차 루프를 포함하면 설계의 물리적 설명력은 높아지지만, 동시에 외부 장거리 배관 CAPEX가 매우 크게 드러난다. "
+            "즉 에너지 측면의 장점과 인프라 투자 부담을 분리해서 읽어야 한다."
         ),
         "",
         (ctx["auxiliary_heat_text"]),
         "",
         "## 6. 한계와 향후 확장",
         "",
-        "- LNG는 v1에서 순수 메탄으로 가정했다.",
-        "- IDC 측 분배 네트워크는 전체 유압망이 아니라 냉방 duty 경계조건으로 단순화했다.",
+        "- LNG 엔탈피 계산은 혼합 LNG surrogate를 쓰지만, 극저온 transport property는 메탄 proxy를 사용했다.",
+        "- IDC 2차 루프는 등가 배관망과 lumped terminal loss로 모델링했으므로 floor-by-floor 배관 상세도는 아직 없다.",
         "- 기화기 설계는 열역학과 형상 스캔 중심이며, 응력과 제작성의 상세 검토는 아직 별도 단계가 필요하다.",
-        "- 경제성은 핵심 동력 비교 범위에 한정되므로 전체 CAPEX/OPEX 분석으로 확장되어야 한다.",
+        "- 경제성은 core-system CAPEX와 단순 O&M까지 확장했지만, 보조 열원별 추가 CAPEX와 site-specific 공사비는 아직 별도 단계가 필요하다.",
         "- 냉각유체 스코어는 휴리스틱 성격이 있으므로, 안전/규제/재료 호환성 검토로 후속 보정이 필요하다.",
         "",
         "## 7. 결론",
@@ -536,7 +544,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         (
             f"본 연구는 총 **{ctx['total_load_kw']} kW**의 IDC 냉방부하를 대상으로, LNG 냉열 기반 냉각 시스템이 "
             f"10 km 기본 설계점에서 충분히 성립함을 보였다. 선정된 기본안은 **{ctx['selected_coolant']}**를 2차 루프 유체로 사용하고, "
-            f"기화기 duty **{ctx['lng_duty_kw']} kW**, 루프 펌프동력 **{ctx['pump_power_kw']} kW**, "
+            f"기화기 duty **{ctx['lng_duty_kw']} kW**, core system power **{ctx['core_power_kw']} kW**, "
             f"배관 열유입 **{ctx['pipeline_heat_gain_kw']} kW**의 수준에서 IDC 부하를 충족한다. "
             f"현재 경계는 약 **{ctx['max_distance_km']} km**이며, 35 km 조건은 **{ctx['long_distance_status']} 판정**으로 정리되었다."
         ),
@@ -785,7 +793,7 @@ def build_report(project_root: Path) -> Path:
                 {"설계 변수": "단열 두께", "값": f"{selected_alternative['pipeline_insulation_thickness_m']:.3f} m"},
                 {"설계 변수": "배관 열유입", "값": f"{_format_number(selected_alternative['pipeline_heat_gain_kw'])} kW"},
                 {"설계 변수": "추가 warm-up", "값": f"{_format_number(selected_alternative['supplemental_warmup_kw'])} kW"},
-                {"설계 변수": "루프 펌프동력", "값": f"{_format_number(selected_alternative['pump_power_kw'])} kW"},
+                {"설계 변수": "LNG 외부 루프 펌프동력", "값": f"{_format_number(selected_alternative['pump_power_kw'])} kW"},
                 {"설계 변수": "공급관 속도", "값": f"{_format_number(selected_pipeline['velocity_supply_m_per_s'], 3)} m/s"},
                 {"설계 변수": "환수관 속도", "값": f"{_format_number(selected_pipeline['velocity_return_m_per_s'], 3)} m/s"},
                 {"설계 변수": "공급관 압력강하", "값": f"{_format_number(selected_pipeline['dp_supply_kpa'])} kPa"},
@@ -808,7 +816,11 @@ def build_report(project_root: Path) -> Path:
                 {"항목": "배관 열유입", "값": f"{_format_number(float(summary['Pipeline heat gain']['value']))} kW"},
                 {"항목": "추가 warm-up", "값": f"{_format_number(float(summary['Supplemental warm-up duty']['value']))} kW"},
                 {"항목": "IDC 도달 가능 냉량", "값": f"{_format_number(float(summary['Available cooling at IDC']['value']))} kW"},
-                {"항목": "루프 펌프동력", "값": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
+                {"항목": "LNG 외부 루프 펌프동력", "값": f"{_format_number(float(summary['LNG system pump power']['value']))} kW"},
+                {"항목": "IDC 2차 루프 펌프동력", "값": f"{_format_number(float(summary['IDC secondary-loop pump power']['value']))} kW"},
+                {"항목": "Core system power", "값": f"{_format_number(float(summary['Core LNG system power']['value']))} kW"},
+                {"항목": "Core installed CAPEX", "값": f"{_format_number(float(summary['Core installed CAPEX']['value']) / 1_000_000_000.0, 2)} 십억원"},
+                {"항목": "Core-system NPV", "값": f"{_format_number(float(summary['Core-system NPV']['value']) / 1_000_000_000.0, 2)} 십억원"},
                 {"항목": "등가 냉각 COP", "값": _format_number(float(summary['Equivalent cooling COP']['value']), 1)},
                 {"항목": "기준 대비 절감 동력", "값": f"{_format_number(float(summary['Baseline-to-LNG power saving']['value']))} kW"},
             ]
@@ -932,13 +944,19 @@ def build_report(project_root: Path) -> Path:
         "minimum_power_kw": _format_number(float(summary["Theoretical minimum power"]["value"])),
         "baseline_power_kw": _format_number(float(summary["Baseline R-134a compressor power"]["value"])),
         "selected_coolant": str(summary["Selected coolant"]["value"]),
+        "lng_stream_model": str(summary["LNG stream model"]["value"]),
         "lng_duty_kw": _format_number(float(summary["LNG vaporizer duty"]["value"])),
         "pipeline_heat_gain_kw": _format_number(float(summary["Pipeline heat gain"]["value"])),
         "pump_power_kw": _format_number(float(summary["LNG system pump power"]["value"])),
+        "lng_loop_pump_kw": _format_number(float(summary["LNG system pump power"]["value"])),
+        "idc_secondary_pump_kw": _format_number(float(summary["IDC secondary-loop pump power"]["value"])),
+        "core_power_kw": _format_number(float(summary["Core LNG system power"]["value"])),
         "power_saving_kw": _format_number(float(summary["Baseline-to-LNG power saving"]["value"])),
         "annual_saving_mwh": _format_number(float(summary["Annual electricity saving"]["value"])),
         "annual_cost_saving_mkrw": _format_number(float(summary["Annual electricity cost saving"]["value"]) / 1_000_000.0),
         "annual_avoided_tco2": _format_number(float(summary["Annual avoided indirect emissions"]["value"])),
+        "core_capex_bkrw": _format_number(float(summary["Core installed CAPEX"]["value"]) / 1_000_000_000.0, 2),
+        "core_npv_bkrw": _format_number(float(summary["Core-system NPV"]["value"]) / 1_000_000_000.0, 2),
         "equivalent_cop": _format_number(float(summary["Equivalent cooling COP"]["value"]), 1),
         "base_distance_km": _format_number(config["assignment"]["pipeline_distance_m"] / 1000.0),
         "max_distance_km": _format_number(distance["max_feasible_distance_m"].iloc[0] / 1000.0),
@@ -1073,16 +1091,17 @@ def build_presentation_script(project_root: Path) -> Path:
         "## 슬라이드 15. 열역학/경제성 평가 - 소비동력 비교",
         f"- 이론 최소동력은 {_format_number(float(summary['Theoretical minimum power']['value']))} kW다.",
         f"- 기준 R-134a 압축기 동력은 {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW다.",
-        f"- LNG 루프 펌프동력은 {_format_number(float(summary['LNG system pump power']['value']))} kW 수준이며, 이것이 핵심 에너지 논거라고 설명한다.",
+        f"- LNG 외부 루프 펌프는 {_format_number(float(summary['LNG system pump power']['value']))} kW, IDC 2차 루프 펌프는 {_format_number(float(summary['IDC secondary-loop pump power']['value']))} kW이며, 합산 core system power는 {_format_number(float(summary['Core LNG system power']['value']))} kW라고 설명한다.",
         f"- 만약 보조 열원이 남는다면, 현재 시나리오 중 최선은 {best_auxiliary['scenario_label']}이고 총 시스템 동력은 {_format_number(best_auxiliary['total_system_power_kw'])} kW라고 설명한다.",
         "",
         "## 슬라이드 16. 열역학/경제성 평가 - 연간 효과와 회수기간",
         f"- 연간 전력 절감량은 {_format_number(annual_map['Electricity saving']['value'])} MWh/년이다.",
         f"- 연간 전력요금 절감은 {_format_number(annual_map['Electricity cost saving']['value'] / 1_000_000.0)} 백만원/년 수준이다.",
         f"- 연간 회피 간접배출은 {_format_number(annual_map['Avoided indirect emissions']['value'])} tCO2/년이다.",
+        f"- 다만 core installed CAPEX는 {_format_number(float(summary['Core installed CAPEX']['value']) / 1_000_000_000.0, 2)} 십억원, NPV는 {_format_number(float(summary['Core-system NPV']['value']) / 1_000_000_000.0, 2)} 십억원으로 현재는 투자 부담이 크다고 덧붙인다.",
         "",
         "## 슬라이드 17. 추가 고려 사항 - 확장 과제",
-        "- 실제 LNG 조성, IDC 냉수 네트워크, 장거리 조건의 제어 전략이 후속 과제라고 정리한다.",
+        "- 혼합 LNG surrogate, IDC 2차 루프, 장거리 조건의 제어 전략과 보조 열원 CAPEX가 후속 과제라고 정리한다.",
         f"- 현재 기본안에서 {int(long_distance['distance_km'])} km 조건은 {'이미 성립' if bool(long_distance['meets_idc_load']) else '아직 불성립'}이라고 정리하고, 그 이유를 IDC 측 HX와 총 duty 관점에서 설명한다.",
         "",
         "## 슬라이드 18. 추가 고려 사항 - 출처 체계와 재현성",

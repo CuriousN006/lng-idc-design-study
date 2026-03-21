@@ -554,7 +554,7 @@ function buildDeck() {
     addSectionHeader(slide, 2, "냉각유체 선정 - 기본안 결정", page++);
     addMetricBox(slide, 0.95, 1.55, 2.35, 1.15, "선정 유체", summary["Selected coolant"].value, "기본안", colors.teal);
     addMetricBox(slide, 3.55, 1.55, 2.35, 1.15, "기본 공급온도", `${formatNumber(bestSupplyRow ? toNumber(bestSupplyRow.supply_temp_k) : 220.0, 0)} K`, "스윕 최적점", colors.gold);
-    addMetricBox(slide, 6.15, 1.55, 2.35, 1.15, "루프 펌프동력", `${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW`, "현재 결과", colors.green);
+    addMetricBox(slide, 6.15, 1.55, 2.35, 1.15, "Core system power", `${formatNumber(toNumber(summary["Core LNG system power"].value), 1)} kW`, "현재 결과", colors.green);
     addSoftBox(slide, 0.95, 3.05, 5.55, 2.65, "암모니아가 기본안인 이유", [
       "실현 가능한 후보 중 루프 동력이 가장 작다.",
       "기화기 쉘 직경이 비교적 작아 장치 규모가 과도하게 커지지 않는다.",
@@ -576,7 +576,7 @@ function buildDeck() {
     addSectionHeader(slide, 3, "LNG 기화기 설계 - 열역학 해석과 핀치", page++);
     addFigure(slide, requireFigure("hx_temperature_profile.png"), 0.72, 1.45, 6.0, 4.65, "구간 분할 온도 프로파일");
     addBullets(slide, 7.55, 1.55, 4.9, [
-      "7 MPa 초임계 메탄의 비열은 온도에 따라 크게 변한다.",
+      "7 MPa 혼합 LNG surrogate의 유효 엔탈피 변화는 온도에 따라 크게 달라진다.",
       "따라서 단일 평균 비열이 아니라 구간 분할 엔탈피 기반 해석이 필요하다.",
       "이번 모델은 112~190 K, 190~205 K, 205~220 K, 220~283 K의 4구간으로 나누어 계산한다.",
       "전 구간에서 최소 핀치 10 K를 만족하도록 설계한다.",
@@ -711,14 +711,14 @@ function buildDeck() {
     addFigure(slide, requireFigure("system_power_comparison.png"), 0.72, 1.45, 6.0, 4.65, "이론 최소동력, 기준 시스템, LNG 시스템 비교");
     addBullets(slide, 7.5, 1.55, 5.0, [
       `이론 최소동력은 ${formatNumber(toNumber(summary["Theoretical minimum power"].value) / 1000.0, 2)} MW, 기준 압축기 동력은 ${formatNumber(toNumber(summary["Baseline R-134a compressor power"].value) / 1000.0, 2)} MW다.`,
-      `LNG 시스템의 직접적 전력 소모는 루프 펌프 ${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW 수준이다.`,
+      `LNG 시스템의 핵심 전동부하는 외부 루프 ${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW와 IDC 2차 루프 ${formatNumber(toNumber(summary["IDC secondary-loop pump power"].value), 1)} kW를 합한 ${formatNumber(toNumber(summary["Core LNG system power"].value), 1)} kW 수준이다.`,
       `보조 열원이 남는다면 현재 시나리오 중 최선은 ${bestAuxiliary.scenario_label}이며 총 시스템 동력은 ${formatNumber(toNumber(bestAuxiliary.total_system_power_kw), 1)} kW다.`,
       "이 결과는 LNG 냉열 활용이 압축기 동력을 거의 제거하는 구조임을 보여준다.",
     ], 16);
     addMetricBox(slide, 7.75, 4.95, 1.55, 0.95, "이론 최소", `${formatNumber(toNumber(summary["Theoretical minimum power"].value) / 1000.0, 2)} MW`, "하한", colors.gold);
     addMetricBox(slide, 9.55, 4.95, 1.8, 0.95, "기준 시스템", `${formatNumber(toNumber(summary["Baseline R-134a compressor power"].value) / 1000.0, 2)} MW`, "R-134a", colors.red);
-    addMetricBox(slide, 11.6, 4.95, 0.95, 0.95, "LNG", `${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW`, "루프", colors.green);
-    addFooterNote(slide, "비교 경계는 기준 압축기 대비 LNG 루프 펌프동력");
+    addMetricBox(slide, 11.35, 4.95, 1.2, 0.95, "LNG", `${formatNumber(toNumber(summary["Core LNG system power"].value), 1)} kW`, "core", colors.green);
+    addFooterNote(slide, "비교 경계는 기준 압축기 대비 core LNG system power");
     finalizeSlide(slide);
   }
 
@@ -730,12 +730,12 @@ function buildDeck() {
     addMetricBox(slide, 6.75, 1.7, 2.55, 1.0, "전력 절감", formatNumber(toNumber(annualMap["Electricity saving"].value), 1), "MWh/년", colors.teal);
     addMetricBox(slide, 9.65, 1.7, 2.65, 1.0, "비용 절감", formatNumber(toNumber(annualMap["Electricity cost saving"].value) / 1_000_000.0, 1), "백만원/년", colors.green);
     addMetricBox(slide, 6.75, 3.05, 2.55, 1.0, "회피 배출", formatNumber(toNumber(annualMap["Avoided indirect emissions"].value), 1), "tCO2/년", colors.gold);
-    addMetricBox(slide, 9.65, 3.05, 2.65, 1.0, "5년 허용 CAPEX", formatNumber(toNumber(summary["Allowable incremental CAPEX at 5-year payback"].value) / 1_000_000.0, 1), "백만원", colors.red);
+    addMetricBox(slide, 9.65, 3.05, 2.65, 1.0, "Core CAPEX", formatNumber(toNumber(summary["Core installed CAPEX"].value) / 1_000_000_000.0, 2), "십억원", colors.red);
     addSoftBox(slide, 6.75, 4.5, 5.55, 1.15, "해석 범위", [
-      "현재 연간 효과는 기준 압축기 동력과 LNG 루프 펌프동력만 비교한 경계조건 결과다.",
-      "하이브리드 보조 열원은 별도 시나리오 테이블로 해석한다.",
+      `현재 core-system NPV는 ${formatNumber(toNumber(summary["Core-system NPV"].value) / 1_000_000_000.0, 2)} 십억원으로, 장거리 외부 배관 CAPEX가 매우 크게 작용한다.`,
+      "하이브리드 보조 열원은 별도 시나리오 테이블로 해석하고, 추가 CAPEX는 아직 보수적으로 제외했다.",
     ]);
-    addFooterNote(slide, "현재 버전은 보조기기·유지관리·금융비용을 아직 제외");
+    addFooterNote(slide, "현재 버전은 core-system CAPEX와 단순 O&M/금융비용까지 포함");
     finalizeSlide(slide);
   }
 
@@ -748,7 +748,7 @@ function buildDeck() {
       "2) IDC 냉수 배관 네트워크 상세 설계",
       "3) 장거리 조건에서의 제어 전략",
       "",
-      "이번 코드 v1은 순수 메탄 가정과 단순화된 IDC 경계조건을 사용했다.",
+      "이번 코드 v2는 혼합 LNG surrogate와 IDC 2차 루프 등가 유압모델까지 포함한다.",
     ]);
     addSoftBox(slide, 4.82, 1.45, 3.8, 4.95, "35 km를 정말 목표로 할 경우", [
       longDistanceMeetsLoad ? "현재 기본안으로도 35 km가 이미 성립한다." : "공급온도 수준 조정",

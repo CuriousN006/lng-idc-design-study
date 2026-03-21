@@ -1,6 +1,7 @@
 # LNG IDC Design
 
-2022년 `LNG 냉열 활용 데이터센터 냉각시스템` 과제를 Python 코드로 재구축한 프로젝트입니다.
+2022년 `LNG 냉열 활용 데이터센터 냉각시스템` 과제를 Python 코드로 재구축한 프로젝트입니다.  
+현재 버전은 혼합 LNG surrogate, IDC 2차 chilled-water 루프, 하이브리드 warm-up 시나리오, CAPEX/NPV/IRR까지 포함합니다.
 
 ## Quick Start
 
@@ -44,6 +45,9 @@ python -m lng_dc_design validate --config config/base.toml
 - `output/supply_temperature_sweep.csv`
 - `output/annual_summary.csv`
 - `output/auxiliary_heat_sources.csv`
+- `output/capex_breakdown.csv`
+- `output/financial_summary.csv`
+- `output/idc_secondary_loop_scan.csv`
 - `output/uncertainty_samples.csv`
 - `output/uncertainty_summary.csv`
 - `output/payback_allowable_capex.csv`
