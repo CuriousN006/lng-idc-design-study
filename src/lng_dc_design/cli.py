@@ -11,6 +11,7 @@ from .hx_lng_vaporizer import design_lng_vaporizer
 from .idc_hx import evaluate_idc_heat_exchange
 from .legacy_compare import compare_with_legacy_excel
 from .load_model import compute_load_model
+from .parallel import default_parallel_enabled_for_command, resolve_parallel_options
 from .pipeline_loop import design_pipeline
 from .report_assets import write_outputs
 from .scenario_study import (
@@ -28,16 +29,17 @@ from .thermo_limit import compute_theoretical_minimum_power
 from .validation import validate_run
 
 
-def run_all(config_path: Path) -> dict[str, object]:
+def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = True) -> dict[str, object]:
     project_root = config_path.resolve().parent.parent
     cfg = load_config(config_path)
     values = cfg.values
+    parallel_options = resolve_parallel_options(enabled=parallel, workers=workers)
 
     load_result = compute_load_model(values)
     minimum_power = compute_theoretical_minimum_power(values, load_result.total_kw)
     baseline = compute_baseline_cycle(values, load_result.total_kw)
     legacy_result = compare_with_legacy_excel(project_root, baseline, minimum_power)
-    screening = compute_fluid_screening(values, load_result.total_kw)
+    screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
     idc_hx_result = evaluate_idc_heat_exchange(values, screening["selected"]["coolprop_name"], load_result.total_kw)
     pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
     hx_result = design_lng_vaporizer(
@@ -45,11 +47,11 @@ def run_all(config_path: Path) -> dict[str, object]:
         _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
         float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
     )
-    scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening)
+    scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening, parallel_options=parallel_options)
     distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
-    supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
-    ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline)
-    zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline)
+    supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline, parallel_options=parallel_options)
+    ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
+    zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
     system_eval = evaluate_system(values, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, legacy_result)
     validation_messages = validate_run(
         project_root,
@@ -105,11 +107,15 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="LNG cold-energy IDC design toolkit")
     parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "scenario-study", "explore-passive-heat", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
     parser.add_argument("--config", required=True, help="Path to TOML configuration file")
+    parser.add_argument("--workers", type=int, default=None, help="Override process worker count for parallel commands")
+    parser.add_argument("--serial", action="store_true", help="Force serial execution even for commands that default to parallel mode")
     args = parser.parse_args()
     config_path = Path(args.config)
+    parallel_enabled = (not args.serial) and (args.workers is not None or default_parallel_enabled_for_command(args.command))
+    parallel_options = resolve_parallel_options(enabled=parallel_enabled, workers=args.workers)
 
     if args.command == "run-all":
-        results = run_all(config_path)
+        results = run_all(config_path, workers=parallel_options.workers, parallel=parallel_options.enabled)
         print(f"Selected coolant: {results['screening']['selected']['fluid']}")
         print(f"IDC total cooling load: {results['load'].total_kw:,.1f} kW")
         print(f"Baseline power: {results['baseline']['compressor_power_kw']:,.1f} kW")
@@ -121,12 +127,12 @@ def main() -> int:
     load_result = compute_load_model(values)
 
     if args.command == "screen-fluids":
-        screening = compute_fluid_screening(values, load_result.total_kw)
+        screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
         print(screening["table"].to_string(index=False))
         return 0
 
     if args.command == "design-hx":
-        screening = compute_fluid_screening(values, load_result.total_kw)
+        screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
         pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
         hx_result = design_lng_vaporizer(
             values,
@@ -138,7 +144,7 @@ def main() -> int:
         return 0
 
     if args.command == "analyze-pipeline":
-        screening = compute_fluid_screening(values, load_result.total_kw)
+        screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
         pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
         print(pipeline_result["sensitivity"].to_string(index=False))
         print(pipeline_result["selected_design"])
@@ -147,18 +153,18 @@ def main() -> int:
     if args.command == "scenario-study":
         minimum_power = compute_theoretical_minimum_power(values, load_result.total_kw)
         baseline = compute_baseline_cycle(values, load_result.total_kw)
-        screening = compute_fluid_screening(values, load_result.total_kw)
+        screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
         pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
         hx_result = design_lng_vaporizer(
             values,
             _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
             float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
         )
-        scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening)
+        scenario_result = evaluate_feasible_alternatives(values, load_result, baseline, screening, parallel_options=parallel_options)
         distance_scenarios = build_distance_scenarios(values, load_result, baseline, hx_result, pipeline_result)
-        supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline)
-        ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline)
-        zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline)
+        supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline, parallel_options=parallel_options)
+        ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
+        zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
         print(distance_scenarios.to_string(index=False))
         print()
         print(supply_temperature_sweep.to_string(index=False))
@@ -171,7 +177,7 @@ def main() -> int:
         return 0
 
     if args.command == "explore-passive-heat":
-        passive_search = evaluate_passive_zero_warmup_search(values)
+        passive_search = evaluate_passive_zero_warmup_search(values, parallel_options=parallel_options)
         output_dir = ensure_directory(config_path.resolve().parent.parent / "output")
         output_path = output_dir / "passive_zero_warmup_search.csv"
         passive_search["table"].to_csv(output_path, index=False)
@@ -200,7 +206,7 @@ def main() -> int:
         return 0
 
     if args.command == "build-report":
-        run_all(config_path)
+        run_all(config_path, workers=parallel_options.workers, parallel=parallel_options.enabled)
         report_path = build_report(config_path.resolve().parent.parent)
         script_path = build_presentation_script(config_path.resolve().parent.parent)
         print(report_path)
@@ -208,13 +214,13 @@ def main() -> int:
         return 0
 
     if args.command == "build-slides":
-        run_all(config_path)
+        run_all(config_path, workers=parallel_options.workers, parallel=parallel_options.enabled)
         presentation_path = build_presentation(config_path.resolve().parent.parent)
         print(presentation_path)
         return 0
 
     if args.command == "build-deliverables":
-        run_all(config_path)
+        run_all(config_path, workers=parallel_options.workers, parallel=parallel_options.enabled)
         built = build_deliverables(config_path.resolve().parent.parent)
         for path in built.values():
             print(path)
@@ -232,7 +238,7 @@ def main() -> int:
         return 0
 
     if args.command == "validate":
-        results = run_all(config_path)
+        results = run_all(config_path, workers=parallel_options.workers, parallel=parallel_options.enabled)
         for message in results["validation"]:
             print(message)
         return 0

@@ -10,6 +10,7 @@ from .economics import add_annualized_columns
 from .fluid_screening import compute_fluid_screening
 from .hx_lng_vaporizer import design_lng_vaporizer
 from .load_model import compute_load_model
+from .parallel import ParallelOptions, map_items
 from .pipeline_loop import design_pipeline
 
 
@@ -28,72 +29,28 @@ def _target_distance_row(sensitivity: pd.DataFrame, target_distance_m: float) ->
     return sensitivity.iloc[(sensitivity["distance_m"] - target_distance_m).abs().argmin()]
 
 
-def evaluate_feasible_alternatives(config: dict, load_result: object, baseline: dict, screening: dict) -> dict[str, object]:
-    rows: list[dict[str, object]] = []
+def evaluate_feasible_alternatives(
+    config: dict,
+    load_result: object,
+    baseline: dict,
+    screening: dict,
+    parallel_options: ParallelOptions | None = None,
+) -> dict[str, object]:
     feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
-
-    for _, candidate in feasible_candidates.iterrows():
-        selected_fluid = candidate.to_dict()
-        try:
-            pipeline_result = design_pipeline(config, selected_fluid, load_result.total_kw)
-            hx_result = design_lng_vaporizer(
-                config,
-                _merge_fluid_with_pipeline(selected_fluid, pipeline_result),
-                float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
-            )
-            selected_pipeline = pipeline_result["selected_design"]
-            pump_power_kw = float(selected_pipeline["pump_power_kw"])
-            available_cooling_kw = (
-                hx_result["required_lng_duty_kw"]
-                - float(selected_pipeline["heat_gain_kw"])
-                - float(selected_pipeline["supplemental_warmup_kw"])
-            )
-            rows.append(
-                {
-                    "fluid": candidate["fluid"],
-                    "coolprop_name": candidate["coolprop_name"],
-                    "screening_score": float(candidate["score"]),
-                    "required_mass_flow_kg_s": float(candidate["required_mass_flow_kg_s"]),
-                    "hx_tube_count": int(hx_result["selected_geometry"]["tube_count"]),
-                    "hx_tube_length_m": float(hx_result["selected_geometry"]["tube_length_m"]),
-                    "hx_shell_diameter_m": float(hx_result["selected_geometry"]["shell_diameter_m"]),
-                    "hx_min_pinch_k": float(hx_result["min_pinch_k"]),
-                    "pipeline_supply_id_m": float(selected_pipeline["supply_id_m"]),
-                    "pipeline_return_id_m": float(selected_pipeline["return_id_m"]),
-                    "pipeline_insulation_thickness_m": float(selected_pipeline["insulation_thickness_m"]),
-                    "pipeline_heat_gain_kw": float(selected_pipeline["heat_gain_kw"]),
-                    "supplemental_warmup_kw": float(selected_pipeline["supplemental_warmup_kw"]),
-                    "pump_power_kw": pump_power_kw,
-                    "available_cooling_kw": available_cooling_kw,
-                    "power_saving_kw": baseline["compressor_power_kw"] - pump_power_kw,
-                    "equivalent_cop": load_result.total_kw / pump_power_kw,
-                    "design_feasible": available_cooling_kw >= load_result.total_kw - 1e-6,
-                    "failure_reason": "",
-                }
-            )
-        except Exception as exc:  # pragma: no cover
-            rows.append(
-                {
-                    "fluid": candidate["fluid"],
-                    "coolprop_name": candidate["coolprop_name"],
-                    "screening_score": float(candidate["score"]),
-                    "required_mass_flow_kg_s": float(candidate["required_mass_flow_kg_s"]),
-                    "hx_tube_count": math.nan,
-                    "hx_tube_length_m": math.nan,
-                    "hx_shell_diameter_m": math.nan,
-                    "hx_min_pinch_k": math.nan,
-                    "pipeline_supply_id_m": math.nan,
-                    "pipeline_return_id_m": math.nan,
-                    "pipeline_insulation_thickness_m": math.nan,
-                    "pipeline_heat_gain_kw": math.nan,
-                    "pump_power_kw": math.nan,
-                    "available_cooling_kw": math.nan,
-                    "power_saving_kw": math.nan,
-                    "equivalent_cop": math.nan,
-                    "design_feasible": False,
-                    "failure_reason": str(exc),
-                }
-            )
+    options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    rows = map_items(
+        _evaluate_feasible_alternative_task,
+        [
+            {
+                "config": config,
+                "candidate": candidate.to_dict(),
+                "required_cooling_kw": load_result.total_kw,
+                "baseline_power_kw": baseline["compressor_power_kw"],
+            }
+            for _, candidate in feasible_candidates.iterrows()
+        ],
+        options,
+    )
 
     alternatives = pd.DataFrame(rows).sort_values(
         ["design_feasible", "pump_power_kw", "screening_score"], ascending=[False, True, False]
@@ -166,42 +123,199 @@ def _with_environment_overrides(config: dict, thermal_case: dict[str, object]) -
     return trial
 
 
-def evaluate_supply_temperature_sweep(config: dict, load_result: object, baseline: dict) -> pd.DataFrame:
+SERIAL_PARALLEL_OPTIONS = ParallelOptions(enabled=False, workers=1)
+
+
+def _evaluate_feasible_alternative_task(task: dict[str, object]) -> dict[str, object]:
+    config = dict(task["config"])
+    candidate = dict(task["candidate"])
+    required_cooling_kw = float(task["required_cooling_kw"])
+    baseline_power_kw = float(task["baseline_power_kw"])
+    try:
+        pipeline_result = design_pipeline(config, candidate, required_cooling_kw)
+        hx_result = design_lng_vaporizer(
+            config,
+            _merge_fluid_with_pipeline(candidate, pipeline_result),
+            float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+        )
+        selected_pipeline = pipeline_result["selected_design"]
+        pump_power_kw = float(selected_pipeline["pump_power_kw"])
+        available_cooling_kw = (
+            hx_result["required_lng_duty_kw"]
+            - float(selected_pipeline["heat_gain_kw"])
+            - float(selected_pipeline["supplemental_warmup_kw"])
+        )
+        return {
+            "fluid": candidate["fluid"],
+            "coolprop_name": candidate["coolprop_name"],
+            "screening_score": float(candidate["score"]),
+            "required_mass_flow_kg_s": float(candidate["required_mass_flow_kg_s"]),
+            "hx_tube_count": int(hx_result["selected_geometry"]["tube_count"]),
+            "hx_tube_length_m": float(hx_result["selected_geometry"]["tube_length_m"]),
+            "hx_shell_diameter_m": float(hx_result["selected_geometry"]["shell_diameter_m"]),
+            "hx_min_pinch_k": float(hx_result["min_pinch_k"]),
+            "pipeline_supply_id_m": float(selected_pipeline["supply_id_m"]),
+            "pipeline_return_id_m": float(selected_pipeline["return_id_m"]),
+            "pipeline_insulation_thickness_m": float(selected_pipeline["insulation_thickness_m"]),
+            "pipeline_heat_gain_kw": float(selected_pipeline["heat_gain_kw"]),
+            "supplemental_warmup_kw": float(selected_pipeline["supplemental_warmup_kw"]),
+            "pump_power_kw": pump_power_kw,
+            "available_cooling_kw": available_cooling_kw,
+            "power_saving_kw": baseline_power_kw - pump_power_kw,
+            "equivalent_cop": required_cooling_kw / pump_power_kw,
+            "design_feasible": available_cooling_kw >= required_cooling_kw - 1e-6,
+            "failure_reason": "",
+        }
+    except Exception as exc:  # pragma: no cover
+        return {
+            "fluid": candidate["fluid"],
+            "coolprop_name": candidate["coolprop_name"],
+            "screening_score": float(candidate["score"]),
+            "required_mass_flow_kg_s": float(candidate["required_mass_flow_kg_s"]),
+            "hx_tube_count": math.nan,
+            "hx_tube_length_m": math.nan,
+            "hx_shell_diameter_m": math.nan,
+            "hx_min_pinch_k": math.nan,
+            "pipeline_supply_id_m": math.nan,
+            "pipeline_return_id_m": math.nan,
+            "pipeline_insulation_thickness_m": math.nan,
+            "pipeline_heat_gain_kw": math.nan,
+            "supplemental_warmup_kw": math.nan,
+            "pump_power_kw": math.nan,
+            "available_cooling_kw": math.nan,
+            "power_saving_kw": math.nan,
+            "equivalent_cop": math.nan,
+            "design_feasible": False,
+            "failure_reason": str(exc),
+        }
+
+
+def _evaluate_supply_temperature_sweep_task(task: dict[str, object]) -> dict[str, object]:
+    config = dict(task["config"])
+    required_cooling_kw = float(task["required_cooling_kw"])
+    baseline_power_kw = float(task["baseline_power_kw"])
+    supply_temp_k = float(task["supply_temp_k"])
+    trial_config = _with_supply_temperature(config, supply_temp_k)
+    try:
+        screening = compute_fluid_screening(
+            trial_config,
+            required_cooling_kw,
+            parallel_options=SERIAL_PARALLEL_OPTIONS,
+        )
+        pipeline_result = design_pipeline(trial_config, screening["selected"], required_cooling_kw)
+        hx_result = design_lng_vaporizer(
+            trial_config,
+            _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+            float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+        )
+        selected_design = pipeline_result["selected_design"]
+        target_distance_m = float(trial_config["system_targets"]["long_distance_pipeline_m"])
+        long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
+        available_cooling_kw = (
+            hx_result["required_lng_duty_kw"]
+            - float(selected_design["heat_gain_kw"])
+            - float(selected_design["supplemental_warmup_kw"])
+        )
+        return {
+            "supply_temp_k": supply_temp_k,
+            "supply_temp_c": supply_temp_k - 273.15,
+            "selected_fluid": screening["selected"]["fluid"],
+            "screening_score": float(screening["selected"]["score"]),
+            "pump_power_kw": float(selected_design["pump_power_kw"]),
+            "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
+            "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
+            "hx_shell_diameter_m": float(hx_result["selected_geometry"]["shell_diameter_m"]),
+            "hx_tube_count": int(hx_result["selected_geometry"]["tube_count"]),
+            "available_cooling_kw": available_cooling_kw,
+            "thermal_margin_kw": available_cooling_kw - required_cooling_kw,
+            "power_saving_kw": baseline_power_kw - float(selected_design["pump_power_kw"]),
+            "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
+            "long_distance_meets_load": bool(long_distance_row["feasible"]),
+            "status": "feasible",
+            "failure_reason": "",
+        }
+    except Exception as exc:  # pragma: no cover
+        return {
+            "supply_temp_k": supply_temp_k,
+            "supply_temp_c": supply_temp_k - 273.15,
+            "selected_fluid": "",
+            "screening_score": math.nan,
+            "pump_power_kw": math.nan,
+            "pipeline_heat_gain_kw": math.nan,
+            "supplemental_warmup_kw": math.nan,
+            "hx_shell_diameter_m": math.nan,
+            "hx_tube_count": math.nan,
+            "available_cooling_kw": math.nan,
+            "thermal_margin_kw": math.nan,
+            "power_saving_kw": math.nan,
+            "max_feasible_distance_km": math.nan,
+            "long_distance_meets_load": False,
+            "status": "failed",
+            "failure_reason": str(exc),
+        }
+
+
+def _evaluate_ambient_closure_task(task: dict[str, object]) -> list[dict[str, object]]:
+    config = dict(task["config"])
+    required_cooling_kw = float(task["required_cooling_kw"])
+    supply_temp_k = float(task["supply_temp_k"])
+    target_distance_m = float(config["system_targets"]["long_distance_pipeline_m"])
+    base_distance_m = float(config["assignment"]["pipeline_distance_m"])
+    tolerance_kw = 1e-3
+
+    trial_config = _with_supply_temperature(config, supply_temp_k)
+    screening = compute_fluid_screening(
+        trial_config,
+        required_cooling_kw,
+        parallel_options=SERIAL_PARALLEL_OPTIONS,
+    )
+    feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
+
     rows: list[dict[str, object]] = []
-    for supply_temp_k in config.get("sensitivity", {}).get("coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]]):
-        trial_config = _with_supply_temperature(config, float(supply_temp_k))
+    for _, candidate in feasible_candidates.iterrows():
+        selected_fluid = candidate.to_dict()
+        is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
         try:
-            screening = compute_fluid_screening(trial_config, load_result.total_kw)
-            pipeline_result = design_pipeline(trial_config, screening["selected"], load_result.total_kw)
+            pipeline_result = design_pipeline(trial_config, selected_fluid, required_cooling_kw)
             hx_result = design_lng_vaporizer(
                 trial_config,
-                _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+                _merge_fluid_with_pipeline(selected_fluid, pipeline_result),
                 float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
             )
             selected_design = pipeline_result["selected_design"]
-            target_distance_m = float(trial_config["system_targets"]["long_distance_pipeline_m"])
             long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
-            available_cooling_kw = (
-                hx_result["required_lng_duty_kw"]
-                - float(selected_design["heat_gain_kw"])
-                - float(selected_design["supplemental_warmup_kw"])
+            closure_distance_m = float(pipeline_result.get("ambient_only_closure_distance_m", math.nan))
+            closure_distance_km = closure_distance_m / 1000.0 if math.isfinite(closure_distance_m) else math.nan
+            warmup_free_at_base = (
+                bool(selected_design["feasible"])
+                and float(selected_design["supplemental_warmup_kw"]) <= tolerance_kw
+            )
+            warmup_free_at_long = (
+                bool(long_distance_row["feasible"])
+                and float(long_distance_row["supplemental_warmup_kw"]) <= tolerance_kw
             )
             rows.append(
                 {
-                    "supply_temp_k": float(supply_temp_k),
-                    "supply_temp_c": float(supply_temp_k) - 273.15,
-                    "selected_fluid": screening["selected"]["fluid"],
-                    "screening_score": float(screening["selected"]["score"]),
+                    "supply_temp_k": supply_temp_k,
+                    "supply_temp_c": supply_temp_k - 273.15,
+                    "fluid": candidate["fluid"],
+                    "coolprop_name": candidate["coolprop_name"],
+                    "selected_by_screening": is_screening_selected,
+                    "screening_score": float(candidate["score"]),
                     "pump_power_kw": float(selected_design["pump_power_kw"]),
                     "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
                     "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
-                    "hx_shell_diameter_m": float(hx_result["selected_geometry"]["shell_diameter_m"]),
-                    "hx_tube_count": int(hx_result["selected_geometry"]["tube_count"]),
-                    "available_cooling_kw": available_cooling_kw,
-                    "thermal_margin_kw": available_cooling_kw - load_result.total_kw,
-                    "power_saving_kw": baseline["compressor_power_kw"] - float(selected_design["pump_power_kw"]),
+                    "actual_lng_duty_kw": float(selected_design["actual_lng_duty_kw"]),
                     "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
-                    "long_distance_meets_load": bool(long_distance_row["feasible"]),
+                    "ambient_only_closure_distance_km": closure_distance_km,
+                    "warmup_free_at_base_distance": warmup_free_at_base,
+                    "warmup_free_at_long_distance": warmup_free_at_long,
+                    "base_distance_km": base_distance_m / 1000.0,
+                    "long_distance_km": target_distance_m / 1000.0,
+                    "long_distance_supplemental_warmup_kw": float(long_distance_row["supplemental_warmup_kw"]),
+                    "long_distance_pump_power_kw": float(long_distance_row["pump_power_kw"]),
+                    "long_distance_feasible": bool(long_distance_row["feasible"]),
+                    "hx_min_pinch_k": float(hx_result["min_pinch_k"]),
                     "status": "feasible",
                     "failure_reason": "",
                 }
@@ -209,114 +323,296 @@ def evaluate_supply_temperature_sweep(config: dict, load_result: object, baselin
         except Exception as exc:  # pragma: no cover
             rows.append(
                 {
-                    "supply_temp_k": float(supply_temp_k),
-                    "supply_temp_c": float(supply_temp_k) - 273.15,
-                    "selected_fluid": "",
-                    "screening_score": math.nan,
+                    "supply_temp_k": supply_temp_k,
+                    "supply_temp_c": supply_temp_k - 273.15,
+                    "fluid": candidate["fluid"],
+                    "coolprop_name": candidate["coolprop_name"],
+                    "selected_by_screening": is_screening_selected,
+                    "screening_score": float(candidate["score"]),
                     "pump_power_kw": math.nan,
                     "pipeline_heat_gain_kw": math.nan,
-                    "hx_shell_diameter_m": math.nan,
-                    "hx_tube_count": math.nan,
-                    "available_cooling_kw": math.nan,
-                    "thermal_margin_kw": math.nan,
-                    "power_saving_kw": math.nan,
+                    "supplemental_warmup_kw": math.nan,
+                    "actual_lng_duty_kw": math.nan,
                     "max_feasible_distance_km": math.nan,
-                    "long_distance_meets_load": False,
+                    "ambient_only_closure_distance_km": math.nan,
+                    "warmup_free_at_base_distance": False,
+                    "warmup_free_at_long_distance": False,
+                    "base_distance_km": base_distance_m / 1000.0,
+                    "long_distance_km": target_distance_m / 1000.0,
+                    "long_distance_supplemental_warmup_kw": math.nan,
+                    "long_distance_pump_power_kw": math.nan,
+                    "long_distance_feasible": False,
+                    "hx_min_pinch_k": math.nan,
                     "status": "failed",
                     "failure_reason": str(exc),
                 }
             )
+    return rows
+
+
+def _evaluate_zero_warmup_target_task(task: dict[str, object]) -> list[dict[str, object]]:
+    config = dict(task["config"])
+    required_cooling_kw = float(task["required_cooling_kw"])
+    target_distance_m = float(task["target_distance_m"])
+    supply_temp_k = float(task["supply_temp_k"])
+    trial_config = _with_supply_temperature(config, supply_temp_k)
+    screening = compute_fluid_screening(
+        trial_config,
+        required_cooling_kw,
+        parallel_options=SERIAL_PARALLEL_OPTIONS,
+    )
+    feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
+    target_config = _with_pipeline_distance(trial_config, target_distance_m)
+    tolerance_kw = 1e-3
+
+    rows: list[dict[str, object]] = []
+    for _, candidate in feasible_candidates.iterrows():
+        selected_fluid = candidate.to_dict()
+        is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
+        try:
+            pipeline_result = design_pipeline(target_config, selected_fluid, required_cooling_kw)
+            feasible_scan = pipeline_result["scan_table"][pipeline_result["scan_table"]["feasible"]].copy()
+            if feasible_scan.empty:
+                raise RuntimeError("No feasible pipeline design found for the target distance.")
+
+            min_supplemental_design = feasible_scan.sort_values(
+                ["supplemental_warmup_kw", "pump_power_kw", "heat_gain_kw"],
+                ascending=[True, True, True],
+            ).iloc[0]
+            zero_warmup_designs = feasible_scan[
+                feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
+            ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
+            best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
+
+            rows.append(
+                {
+                    "target_distance_m": target_distance_m,
+                    "target_distance_km": target_distance_m / 1000.0,
+                    "supply_temp_k": supply_temp_k,
+                    "supply_temp_c": supply_temp_k - 273.15,
+                    "fluid": candidate["fluid"],
+                    "coolprop_name": candidate["coolprop_name"],
+                    "selected_by_screening": is_screening_selected,
+                    "screening_score": float(candidate["score"]),
+                    "zero_warmup_design_found": not zero_warmup_designs.empty,
+                    "minimum_supplemental_warmup_kw": float(min_supplemental_design["supplemental_warmup_kw"]),
+                    "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
+                    "best_design_heat_gain_kw": float(best_design["heat_gain_kw"]),
+                    "best_design_supplemental_warmup_kw": float(best_design["supplemental_warmup_kw"]),
+                    "best_design_actual_lng_duty_kw": float(best_design["actual_lng_duty_kw"]),
+                    "best_design_supply_id_m": float(best_design["supply_id_m"]),
+                    "best_design_return_id_m": float(best_design["return_id_m"]),
+                    "best_design_insulation_thickness_m": float(best_design["insulation_thickness_m"]),
+                    "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
+                    "status": "feasible",
+                    "failure_reason": "",
+                }
+            )
+        except Exception as exc:  # pragma: no cover
+            rows.append(
+                {
+                    "target_distance_m": target_distance_m,
+                    "target_distance_km": target_distance_m / 1000.0,
+                    "supply_temp_k": supply_temp_k,
+                    "supply_temp_c": supply_temp_k - 273.15,
+                    "fluid": candidate["fluid"],
+                    "coolprop_name": candidate["coolprop_name"],
+                    "selected_by_screening": is_screening_selected,
+                    "screening_score": float(candidate["score"]),
+                    "zero_warmup_design_found": False,
+                    "minimum_supplemental_warmup_kw": math.nan,
+                    "best_design_pump_power_kw": math.nan,
+                    "best_design_heat_gain_kw": math.nan,
+                    "best_design_supplemental_warmup_kw": math.nan,
+                    "best_design_actual_lng_duty_kw": math.nan,
+                    "best_design_supply_id_m": math.nan,
+                    "best_design_return_id_m": math.nan,
+                    "best_design_insulation_thickness_m": math.nan,
+                    "max_feasible_distance_km": math.nan,
+                    "status": "failed",
+                    "failure_reason": str(exc),
+                }
+            )
+    return rows
+
+
+def _evaluate_passive_zero_warmup_task(task: dict[str, object]) -> list[dict[str, object]]:
+    config = dict(task["config"])
+    scenario_name = str(task["scenario_name"])
+    thermal_case = dict(task["thermal_case"])
+    target_distance_m = float(task["target_distance_m"])
+    supply_temp_k = float(task["supply_temp_k"])
+    diameter_candidates_m = list(task["diameter_candidates_m"])
+    insulation_candidates_m = list(task["insulation_candidates_m"])
+    tolerance_kw = 1e-3
+
+    scenario_config = _with_environment_overrides(config, thermal_case)
+    load_result = compute_load_model(scenario_config)
+    baseline = compute_baseline_cycle(scenario_config, load_result.total_kw)
+
+    trial_config = _with_supply_temperature(scenario_config, supply_temp_k)
+    trial_config = _with_pipeline_distance(trial_config, target_distance_m)
+    trial_config = _with_pipeline_search_grid(trial_config, diameter_candidates_m, insulation_candidates_m)
+    screening = compute_fluid_screening(
+        trial_config,
+        load_result.total_kw,
+        parallel_options=SERIAL_PARALLEL_OPTIONS,
+    )
+    feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
+
+    rows: list[dict[str, object]] = []
+    for _, candidate in feasible_candidates.iterrows():
+        selected_fluid = candidate.to_dict()
+        is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
+        try:
+            pipeline_result = design_pipeline(
+                trial_config,
+                selected_fluid,
+                load_result.total_kw,
+                thermal_case=thermal_case,
+            )
+            feasible_scan = pipeline_result["scan_table"][pipeline_result["scan_table"]["feasible"]].copy()
+            if feasible_scan.empty:
+                raise RuntimeError("No feasible pipeline design found for the configured passive-heat case.")
+
+            min_supplemental_design = feasible_scan.sort_values(
+                ["supplemental_warmup_kw", "pump_power_kw", "heat_gain_kw"],
+                ascending=[True, True, True],
+            ).iloc[0]
+            zero_warmup_designs = feasible_scan[
+                feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
+            ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
+            best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
+
+            rows.append(
+                {
+                    "scenario_name": scenario_name,
+                    "thermal_mode": str(thermal_case.get("mode", "air")),
+                    "ambient_air_temp_k": float(
+                        thermal_case.get("ambient_air_temp_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                    ),
+                    "wind_speed_m_per_s": float(thermal_case.get("wind_speed_m_per_s", 0.0)),
+                    "solar_absorbed_flux_w_per_m2": float(thermal_case.get("solar_absorbed_flux_w_per_m2", 0.0)),
+                    "soil_temperature_k": float(
+                        thermal_case.get("soil_temperature_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                    ),
+                    "pump_heat_to_fluid_fraction": float(thermal_case.get("pump_heat_to_fluid_fraction", 0.0)),
+                    "target_distance_m": target_distance_m,
+                    "target_distance_km": target_distance_m / 1000.0,
+                    "required_cooling_kw": float(load_result.total_kw),
+                    "baseline_power_kw": float(baseline["compressor_power_kw"]),
+                    "supply_temp_k": supply_temp_k,
+                    "supply_temp_c": supply_temp_k - 273.15,
+                    "fluid": candidate["fluid"],
+                    "coolprop_name": candidate["coolprop_name"],
+                    "selected_by_screening": is_screening_selected,
+                    "screening_score": float(candidate["score"]),
+                    "zero_warmup_design_found": not zero_warmup_designs.empty,
+                    "minimum_supplemental_warmup_kw": float(min_supplemental_design["supplemental_warmup_kw"]),
+                    "best_design_line_heat_gain_kw": float(best_design["line_heat_gain_kw"]),
+                    "best_design_pump_heat_to_fluid_kw": float(best_design["pump_heat_to_fluid_kw"]),
+                    "best_design_total_heat_gain_kw": float(best_design["heat_gain_kw"]),
+                    "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
+                    "best_design_supply_id_m": float(best_design["supply_id_m"]),
+                    "best_design_return_id_m": float(best_design["return_id_m"]),
+                    "best_design_insulation_thickness_m": float(best_design["insulation_thickness_m"]),
+                    "best_design_power_saving_kw": float(baseline["compressor_power_kw"]) - float(best_design["pump_power_kw"]),
+                    "status": "feasible",
+                    "failure_reason": "",
+                }
+            )
+        except Exception as exc:  # pragma: no cover
+            rows.append(
+                {
+                    "scenario_name": scenario_name,
+                    "thermal_mode": str(thermal_case.get("mode", "air")),
+                    "ambient_air_temp_k": float(
+                        thermal_case.get("ambient_air_temp_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                    ),
+                    "wind_speed_m_per_s": float(thermal_case.get("wind_speed_m_per_s", 0.0)),
+                    "solar_absorbed_flux_w_per_m2": float(thermal_case.get("solar_absorbed_flux_w_per_m2", 0.0)),
+                    "soil_temperature_k": float(
+                        thermal_case.get("soil_temperature_k", scenario_config["assignment"]["ambient_air_temp_k"])
+                    ),
+                    "pump_heat_to_fluid_fraction": float(thermal_case.get("pump_heat_to_fluid_fraction", 0.0)),
+                    "target_distance_m": target_distance_m,
+                    "target_distance_km": target_distance_m / 1000.0,
+                    "required_cooling_kw": float(load_result.total_kw),
+                    "baseline_power_kw": float(baseline["compressor_power_kw"]),
+                    "supply_temp_k": supply_temp_k,
+                    "supply_temp_c": supply_temp_k - 273.15,
+                    "fluid": candidate["fluid"],
+                    "coolprop_name": candidate["coolprop_name"],
+                    "selected_by_screening": is_screening_selected,
+                    "screening_score": float(candidate["score"]),
+                    "zero_warmup_design_found": False,
+                    "minimum_supplemental_warmup_kw": math.nan,
+                    "best_design_line_heat_gain_kw": math.nan,
+                    "best_design_pump_heat_to_fluid_kw": math.nan,
+                    "best_design_total_heat_gain_kw": math.nan,
+                    "best_design_pump_power_kw": math.nan,
+                    "best_design_supply_id_m": math.nan,
+                    "best_design_return_id_m": math.nan,
+                    "best_design_insulation_thickness_m": math.nan,
+                    "best_design_power_saving_kw": math.nan,
+                    "status": "failed",
+                    "failure_reason": str(exc),
+                }
+            )
+    return rows
+
+
+def evaluate_supply_temperature_sweep(
+    config: dict,
+    load_result: object,
+    baseline: dict,
+    parallel_options: ParallelOptions | None = None,
+) -> pd.DataFrame:
+    options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    rows = map_items(
+        _evaluate_supply_temperature_sweep_task,
+        [
+            {
+                "config": config,
+                "required_cooling_kw": load_result.total_kw,
+                "baseline_power_kw": baseline["compressor_power_kw"],
+                "supply_temp_k": float(supply_temp_k),
+            }
+            for supply_temp_k in config.get(
+                "sensitivity",
+                {},
+            ).get("coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]])
+        ],
+        options,
+    )
     return add_annualized_columns(pd.DataFrame(rows).sort_values("supply_temp_k").reset_index(drop=True), "pump_power_kw", baseline["compressor_power_kw"], config)
 
 
-def evaluate_ambient_closure_map(config: dict, load_result: object, baseline: dict) -> dict[str, object]:
-    rows: list[dict[str, object]] = []
+def evaluate_ambient_closure_map(
+    config: dict,
+    load_result: object,
+    baseline: dict,
+    parallel_options: ParallelOptions | None = None,
+) -> dict[str, object]:
     target_distance_m = float(config["system_targets"]["long_distance_pipeline_m"])
     base_distance_m = float(config["assignment"]["pipeline_distance_m"])
-    tolerance_kw = 1e-3
-
-    for supply_temp_k in config.get("sensitivity", {}).get(
-        "coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]]
-    ):
-        trial_config = _with_supply_temperature(config, float(supply_temp_k))
-        screening = compute_fluid_screening(trial_config, load_result.total_kw)
-        feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
-
-        for _, candidate in feasible_candidates.iterrows():
-            selected_fluid = candidate.to_dict()
-            is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
-            try:
-                pipeline_result = design_pipeline(trial_config, selected_fluid, load_result.total_kw)
-                hx_result = design_lng_vaporizer(
-                    trial_config,
-                    _merge_fluid_with_pipeline(selected_fluid, pipeline_result),
-                    float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
-                )
-                selected_design = pipeline_result["selected_design"]
-                long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
-                closure_distance_m = float(pipeline_result.get("ambient_only_closure_distance_m", math.nan))
-                closure_distance_km = closure_distance_m / 1000.0 if math.isfinite(closure_distance_m) else math.nan
-                warmup_free_at_base = (
-                    bool(selected_design["feasible"])
-                    and float(selected_design["supplemental_warmup_kw"]) <= tolerance_kw
-                )
-                warmup_free_at_long = (
-                    bool(long_distance_row["feasible"])
-                    and float(long_distance_row["supplemental_warmup_kw"]) <= tolerance_kw
-                )
-                rows.append(
-                    {
-                        "supply_temp_k": float(supply_temp_k),
-                        "supply_temp_c": float(supply_temp_k) - 273.15,
-                        "fluid": candidate["fluid"],
-                        "coolprop_name": candidate["coolprop_name"],
-                        "selected_by_screening": is_screening_selected,
-                        "screening_score": float(candidate["score"]),
-                        "pump_power_kw": float(selected_design["pump_power_kw"]),
-                        "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
-                        "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
-                        "actual_lng_duty_kw": float(selected_design["actual_lng_duty_kw"]),
-                        "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
-                        "ambient_only_closure_distance_km": closure_distance_km,
-                        "warmup_free_at_base_distance": warmup_free_at_base,
-                        "warmup_free_at_long_distance": warmup_free_at_long,
-                        "base_distance_km": base_distance_m / 1000.0,
-                        "long_distance_km": target_distance_m / 1000.0,
-                        "long_distance_supplemental_warmup_kw": float(long_distance_row["supplemental_warmup_kw"]),
-                        "long_distance_pump_power_kw": float(long_distance_row["pump_power_kw"]),
-                        "long_distance_feasible": bool(long_distance_row["feasible"]),
-                        "hx_min_pinch_k": float(hx_result["min_pinch_k"]),
-                        "status": "feasible",
-                        "failure_reason": "",
-                    }
-                )
-            except Exception as exc:  # pragma: no cover
-                rows.append(
-                    {
-                        "supply_temp_k": float(supply_temp_k),
-                        "supply_temp_c": float(supply_temp_k) - 273.15,
-                        "fluid": candidate["fluid"],
-                        "coolprop_name": candidate["coolprop_name"],
-                        "selected_by_screening": is_screening_selected,
-                        "screening_score": float(candidate["score"]),
-                        "pump_power_kw": math.nan,
-                        "pipeline_heat_gain_kw": math.nan,
-                        "supplemental_warmup_kw": math.nan,
-                        "actual_lng_duty_kw": math.nan,
-                        "max_feasible_distance_km": math.nan,
-                        "ambient_only_closure_distance_km": math.nan,
-                        "warmup_free_at_base_distance": False,
-                        "warmup_free_at_long_distance": False,
-                        "base_distance_km": base_distance_m / 1000.0,
-                        "long_distance_km": target_distance_m / 1000.0,
-                        "long_distance_supplemental_warmup_kw": math.nan,
-                        "long_distance_pump_power_kw": math.nan,
-                        "long_distance_feasible": False,
-                        "hx_min_pinch_k": math.nan,
-                        "status": "failed",
-                        "failure_reason": str(exc),
-                    }
-                )
+    options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    task_rows = map_items(
+        _evaluate_ambient_closure_task,
+        [
+            {
+                "config": config,
+                "required_cooling_kw": load_result.total_kw,
+                "supply_temp_k": float(supply_temp_k),
+            }
+            for supply_temp_k in config.get(
+                "sensitivity",
+                {},
+            ).get("coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]])
+        ],
+        options,
+    )
+    rows = [row for batch in task_rows for row in batch]
 
     frame = pd.DataFrame(rows)
     frame["closure_rank_km"] = frame["ambient_only_closure_distance_km"].fillna(math.inf)
@@ -343,92 +639,37 @@ def evaluate_ambient_closure_map(config: dict, load_result: object, baseline: di
     }
 
 
-def evaluate_zero_warmup_target_search(config: dict, load_result: object, baseline: dict) -> dict[str, object]:
-    rows: list[dict[str, object]] = []
-    tolerance_kw = 1e-3
+def evaluate_zero_warmup_target_search(
+    config: dict,
+    load_result: object,
+    baseline: dict,
+    parallel_options: ParallelOptions | None = None,
+) -> dict[str, object]:
     target_distances_m = sorted(
         {
             float(config["assignment"]["pipeline_distance_m"]),
             float(config["system_targets"]["long_distance_pipeline_m"]),
         }
     )
-
-    for target_distance_m in target_distances_m:
-        for supply_temp_k in config.get("sensitivity", {}).get(
-            "coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]]
-        ):
-            trial_config = _with_supply_temperature(config, float(supply_temp_k))
-            screening = compute_fluid_screening(trial_config, load_result.total_kw)
-            feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
-
-            for _, candidate in feasible_candidates.iterrows():
-                selected_fluid = candidate.to_dict()
-                is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
-                target_config = _with_pipeline_distance(trial_config, target_distance_m)
-                try:
-                    pipeline_result = design_pipeline(target_config, selected_fluid, load_result.total_kw)
-                    feasible_scan = pipeline_result["scan_table"][pipeline_result["scan_table"]["feasible"]].copy()
-                    if feasible_scan.empty:
-                        raise RuntimeError("No feasible pipeline design found for the target distance.")
-
-                    min_supplemental_design = feasible_scan.sort_values(
-                        ["supplemental_warmup_kw", "pump_power_kw", "heat_gain_kw"],
-                        ascending=[True, True, True],
-                    ).iloc[0]
-                    zero_warmup_designs = feasible_scan[
-                        feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
-                    ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
-                    best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
-
-                    rows.append(
-                        {
-                            "target_distance_m": float(target_distance_m),
-                            "target_distance_km": float(target_distance_m) / 1000.0,
-                            "supply_temp_k": float(supply_temp_k),
-                            "supply_temp_c": float(supply_temp_k) - 273.15,
-                            "fluid": candidate["fluid"],
-                            "coolprop_name": candidate["coolprop_name"],
-                            "selected_by_screening": is_screening_selected,
-                            "screening_score": float(candidate["score"]),
-                            "zero_warmup_design_found": not zero_warmup_designs.empty,
-                            "minimum_supplemental_warmup_kw": float(min_supplemental_design["supplemental_warmup_kw"]),
-                            "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
-                            "best_design_heat_gain_kw": float(best_design["heat_gain_kw"]),
-                            "best_design_supplemental_warmup_kw": float(best_design["supplemental_warmup_kw"]),
-                            "best_design_actual_lng_duty_kw": float(best_design["actual_lng_duty_kw"]),
-                            "best_design_supply_id_m": float(best_design["supply_id_m"]),
-                            "best_design_return_id_m": float(best_design["return_id_m"]),
-                            "best_design_insulation_thickness_m": float(best_design["insulation_thickness_m"]),
-                            "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
-                            "status": "feasible",
-                            "failure_reason": "",
-                        }
-                    )
-                except Exception as exc:  # pragma: no cover
-                    rows.append(
-                        {
-                            "target_distance_m": float(target_distance_m),
-                            "target_distance_km": float(target_distance_m) / 1000.0,
-                            "supply_temp_k": float(supply_temp_k),
-                            "supply_temp_c": float(supply_temp_k) - 273.15,
-                            "fluid": candidate["fluid"],
-                            "coolprop_name": candidate["coolprop_name"],
-                            "selected_by_screening": is_screening_selected,
-                            "screening_score": float(candidate["score"]),
-                            "zero_warmup_design_found": False,
-                            "minimum_supplemental_warmup_kw": math.nan,
-                            "best_design_pump_power_kw": math.nan,
-                            "best_design_heat_gain_kw": math.nan,
-                            "best_design_supplemental_warmup_kw": math.nan,
-                            "best_design_actual_lng_duty_kw": math.nan,
-                            "best_design_supply_id_m": math.nan,
-                            "best_design_return_id_m": math.nan,
-                            "best_design_insulation_thickness_m": math.nan,
-                            "max_feasible_distance_km": math.nan,
-                            "status": "failed",
-                            "failure_reason": str(exc),
-                        }
-                    )
+    options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    task_rows = map_items(
+        _evaluate_zero_warmup_target_task,
+        [
+            {
+                "config": config,
+                "required_cooling_kw": load_result.total_kw,
+                "target_distance_m": float(target_distance_m),
+                "supply_temp_k": float(supply_temp_k),
+            }
+            for target_distance_m in target_distances_m
+            for supply_temp_k in config.get(
+                "sensitivity",
+                {},
+            ).get("coolant_supply_temp_candidates_k", [config["coolant_loop"]["supply_temp_k"]])
+        ],
+        options,
+    )
+    rows = [row for batch in task_rows for row in batch]
 
     frame = pd.DataFrame(rows).sort_values(
         ["target_distance_m", "minimum_supplemental_warmup_kw", "best_design_pump_power_kw", "screening_score"],
@@ -460,7 +701,10 @@ def evaluate_zero_warmup_target_search(config: dict, load_result: object, baseli
     }
 
 
-def evaluate_passive_zero_warmup_search(config: dict) -> dict[str, object]:
+def evaluate_passive_zero_warmup_search(
+    config: dict,
+    parallel_options: ParallelOptions | None = None,
+) -> dict[str, object]:
     search_cfg = config.get("passive_heat_search", {})
     scenarios = list(search_cfg.get("scenarios", []))
     if not scenarios:
@@ -485,130 +729,26 @@ def evaluate_passive_zero_warmup_search(config: dict) -> dict[str, object]:
         )
     )
 
-    rows: list[dict[str, object]] = []
-    tolerance_kw = 1e-3
-
-    for scenario in scenarios:
-        scenario_name = str(scenario.get("name", "unnamed"))
-        thermal_case = {key: value for key, value in scenario.items() if key != "name"}
-        scenario_config = _with_environment_overrides(config, thermal_case)
-        load_result = compute_load_model(scenario_config)
-        baseline = compute_baseline_cycle(scenario_config, load_result.total_kw)
-
-        for target_distance_m in target_distances_m:
-            for supply_temp_k in supply_temp_candidates_k:
-                trial_config = _with_supply_temperature(scenario_config, float(supply_temp_k))
-                trial_config = _with_pipeline_distance(trial_config, float(target_distance_m))
-                trial_config = _with_pipeline_search_grid(trial_config, diameter_candidates_m, insulation_candidates_m)
-                screening = compute_fluid_screening(trial_config, load_result.total_kw)
-                feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
-
-                for _, candidate in feasible_candidates.iterrows():
-                    selected_fluid = candidate.to_dict()
-                    is_screening_selected = str(candidate["fluid"]) == str(screening["selected"]["fluid"])
-                    try:
-                        pipeline_result = design_pipeline(
-                            trial_config,
-                            selected_fluid,
-                            load_result.total_kw,
-                            thermal_case=thermal_case,
-                        )
-                        feasible_scan = pipeline_result["scan_table"][pipeline_result["scan_table"]["feasible"]].copy()
-                        if feasible_scan.empty:
-                            raise RuntimeError("No feasible pipeline design found for the configured passive-heat case.")
-
-                        min_supplemental_design = feasible_scan.sort_values(
-                            ["supplemental_warmup_kw", "pump_power_kw", "heat_gain_kw"],
-                            ascending=[True, True, True],
-                        ).iloc[0]
-                        zero_warmup_designs = feasible_scan[
-                            feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
-                        ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
-                        best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
-
-                        rows.append(
-                            {
-                                "scenario_name": scenario_name,
-                                "thermal_mode": str(thermal_case.get("mode", "air")),
-                                "ambient_air_temp_k": float(
-                                    thermal_case.get("ambient_air_temp_k", scenario_config["assignment"]["ambient_air_temp_k"])
-                                ),
-                                "wind_speed_m_per_s": float(thermal_case.get("wind_speed_m_per_s", 0.0)),
-                                "solar_absorbed_flux_w_per_m2": float(
-                                    thermal_case.get("solar_absorbed_flux_w_per_m2", 0.0)
-                                ),
-                                "soil_temperature_k": float(
-                                    thermal_case.get("soil_temperature_k", scenario_config["assignment"]["ambient_air_temp_k"])
-                                ),
-                                "pump_heat_to_fluid_fraction": float(
-                                    thermal_case.get("pump_heat_to_fluid_fraction", 0.0)
-                                ),
-                                "target_distance_m": float(target_distance_m),
-                                "target_distance_km": float(target_distance_m) / 1000.0,
-                                "required_cooling_kw": float(load_result.total_kw),
-                                "baseline_power_kw": float(baseline["compressor_power_kw"]),
-                                "supply_temp_k": float(supply_temp_k),
-                                "supply_temp_c": float(supply_temp_k) - 273.15,
-                                "fluid": candidate["fluid"],
-                                "coolprop_name": candidate["coolprop_name"],
-                                "selected_by_screening": is_screening_selected,
-                                "screening_score": float(candidate["score"]),
-                                "zero_warmup_design_found": not zero_warmup_designs.empty,
-                                "minimum_supplemental_warmup_kw": float(min_supplemental_design["supplemental_warmup_kw"]),
-                                "best_design_line_heat_gain_kw": float(best_design["line_heat_gain_kw"]),
-                                "best_design_pump_heat_to_fluid_kw": float(best_design["pump_heat_to_fluid_kw"]),
-                                "best_design_total_heat_gain_kw": float(best_design["heat_gain_kw"]),
-                                "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
-                                "best_design_supply_id_m": float(best_design["supply_id_m"]),
-                                "best_design_return_id_m": float(best_design["return_id_m"]),
-                                "best_design_insulation_thickness_m": float(best_design["insulation_thickness_m"]),
-                                "best_design_power_saving_kw": float(baseline["compressor_power_kw"]) - float(best_design["pump_power_kw"]),
-                                "status": "feasible",
-                                "failure_reason": "",
-                            }
-                        )
-                    except Exception as exc:  # pragma: no cover
-                        rows.append(
-                            {
-                                "scenario_name": scenario_name,
-                                "thermal_mode": str(thermal_case.get("mode", "air")),
-                                "ambient_air_temp_k": float(
-                                    thermal_case.get("ambient_air_temp_k", scenario_config["assignment"]["ambient_air_temp_k"])
-                                ),
-                                "wind_speed_m_per_s": float(thermal_case.get("wind_speed_m_per_s", 0.0)),
-                                "solar_absorbed_flux_w_per_m2": float(
-                                    thermal_case.get("solar_absorbed_flux_w_per_m2", 0.0)
-                                ),
-                                "soil_temperature_k": float(
-                                    thermal_case.get("soil_temperature_k", scenario_config["assignment"]["ambient_air_temp_k"])
-                                ),
-                                "pump_heat_to_fluid_fraction": float(
-                                    thermal_case.get("pump_heat_to_fluid_fraction", 0.0)
-                                ),
-                                "target_distance_m": float(target_distance_m),
-                                "target_distance_km": float(target_distance_m) / 1000.0,
-                                "required_cooling_kw": float(load_result.total_kw),
-                                "baseline_power_kw": float(baseline["compressor_power_kw"]),
-                                "supply_temp_k": float(supply_temp_k),
-                                "supply_temp_c": float(supply_temp_k) - 273.15,
-                                "fluid": candidate["fluid"],
-                                "coolprop_name": candidate["coolprop_name"],
-                                "selected_by_screening": is_screening_selected,
-                                "screening_score": float(candidate["score"]),
-                                "zero_warmup_design_found": False,
-                                "minimum_supplemental_warmup_kw": math.nan,
-                                "best_design_line_heat_gain_kw": math.nan,
-                                "best_design_pump_heat_to_fluid_kw": math.nan,
-                                "best_design_total_heat_gain_kw": math.nan,
-                                "best_design_pump_power_kw": math.nan,
-                                "best_design_supply_id_m": math.nan,
-                                "best_design_return_id_m": math.nan,
-                                "best_design_insulation_thickness_m": math.nan,
-                                "best_design_power_saving_kw": math.nan,
-                                "status": "failed",
-                                "failure_reason": str(exc),
-                            }
-                        )
+    options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    task_rows = map_items(
+        _evaluate_passive_zero_warmup_task,
+        [
+            {
+                "config": config,
+                "scenario_name": str(scenario.get("name", "unnamed")),
+                "thermal_case": {key: value for key, value in scenario.items() if key != "name"},
+                "target_distance_m": float(target_distance_m),
+                "supply_temp_k": float(supply_temp_k),
+                "diameter_candidates_m": diameter_candidates_m,
+                "insulation_candidates_m": insulation_candidates_m,
+            }
+            for scenario in scenarios
+            for target_distance_m in target_distances_m
+            for supply_temp_k in supply_temp_candidates_k
+        ],
+        options,
+    )
+    rows = [row for batch in task_rows for row in batch]
 
     frame = pd.DataFrame(rows).sort_values(
         ["scenario_name", "target_distance_m", "minimum_supplemental_warmup_kw", "best_design_pump_power_kw", "screening_score"],

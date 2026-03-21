@@ -11,6 +11,7 @@ from lng_dc_design.fluid_screening import compute_fluid_screening
 from lng_dc_design.hx_lng_vaporizer import design_lng_vaporizer
 from lng_dc_design.idc_hx import evaluate_idc_heat_exchange
 from lng_dc_design.load_model import compute_load_model
+from lng_dc_design.parallel import resolve_parallel_options
 from lng_dc_design.pipeline_loop import design_pipeline
 from lng_dc_design.scenario_study import (
     _merge_fluid_with_pipeline,
@@ -96,7 +97,7 @@ class SmokeTest(unittest.TestCase):
         self.assertGreater(system_eval["annual"]["cost_saving_krw_per_year"], 0.0)
 
     def test_build_deliverables(self) -> None:
-        run_all(self.project_root / "config" / "base.toml")
+        run_all(self.project_root / "config" / "base.toml", parallel=False)
         built = build_deliverables(self.project_root)
         self.assertTrue(built["report"].exists())
         self.assertTrue(built["script"].exists())
@@ -145,6 +146,41 @@ class SmokeTest(unittest.TestCase):
         self.assertFalse(passive_search["table"].empty)
         self.assertIn("baseline_air", passive_search["selected_by_scenario"])
         self.assertIn("warm_buried_pipe", passive_search["selected_by_scenario"])
+
+    def test_parallel_consistency(self) -> None:
+        load_result = compute_load_model(self.config)
+        baseline = compute_baseline_cycle(self.config, load_result.total_kw)
+        serial_options = resolve_parallel_options(enabled=False, workers=None)
+        parallel_options = resolve_parallel_options(enabled=True, workers=2)
+
+        screening_serial = compute_fluid_screening(self.config, load_result.total_kw, parallel_options=serial_options)
+        screening_parallel = compute_fluid_screening(self.config, load_result.total_kw, parallel_options=parallel_options)
+        self.assertEqual(screening_serial["selected"]["fluid"], screening_parallel["selected"]["fluid"])
+        self.assertAlmostEqual(
+            float(screening_serial["selected"]["score"]),
+            float(screening_parallel["selected"]["score"]),
+            places=9,
+        )
+
+        sweep_serial = evaluate_supply_temperature_sweep(
+            self.config,
+            load_result,
+            baseline,
+            parallel_options=serial_options,
+        ).sort_values("supply_temp_k").reset_index(drop=True)
+        sweep_parallel = evaluate_supply_temperature_sweep(
+            self.config,
+            load_result,
+            baseline,
+            parallel_options=parallel_options,
+        ).sort_values("supply_temp_k").reset_index(drop=True)
+        self.assertEqual(
+            sweep_serial[["supply_temp_k", "selected_fluid"]].to_dict("records"),
+            sweep_parallel[["supply_temp_k", "selected_fluid"]].to_dict("records"),
+        )
+        for column in ["pump_power_kw", "supplemental_warmup_kw", "max_feasible_distance_km"]:
+            for serial_value, parallel_value in zip(sweep_serial[column], sweep_parallel[column], strict=True):
+                self.assertAlmostEqual(float(serial_value), float(parallel_value), places=6)
 
 
 if __name__ == "__main__":
