@@ -473,6 +473,8 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         "",
         str(ctx["closure_interpretation_text"]),
         "",
+        str(ctx["practical_passive_text"]),
+        "",
         "### 4.7 연간 효과와 경제성",
         "",
         str(ctx["annual_md"]),
@@ -486,6 +488,8 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
             f"연간 **{ctx['annual_cost_saving_mkrw']} 백만원/년**의 전기요금을 절감하며, "
             f"연간 **{ctx['annual_avoided_tco2']} tCO2/년**의 간접배출을 회피한다."
         ),
+        "",
+        str(ctx["auxiliary_heat_text"]),
         "",
         "### 4.8 기존 엑셀 결과와 비교",
         "",
@@ -511,9 +515,13 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
             "LNG hot-end 조건을 맞추기 위한 보조 열원 또는 더 긴 배관거리의 도움을 받는 하이브리드 운전점으로 읽는 편이 더 정확하다."
         ),
         "",
+        (ctx["practical_passive_text"]),
+        "",
         (
             "다섯째, 등가 COP와 연간 절감량은 매우 크지만, 현 단계의 경제성 경계는 압축기 동력 대 펌프동력 비교에 한정되어 있다."
         ),
+        "",
+        (ctx["auxiliary_heat_text"]),
         "",
         "## 6. 한계와 향후 확장",
         "",
@@ -558,10 +566,12 @@ def build_report(project_root: Path) -> Path:
     temperature = pd.read_csv(output_dir / "supply_temperature_sweep.csv")
     ambient_closure = pd.read_csv(output_dir / "ambient_closure_map.csv")
     annual = pd.read_csv(output_dir / "annual_summary.csv")
+    auxiliary_heat = pd.read_csv(output_dir / "auxiliary_heat_sources.csv")
     payback = pd.read_csv(output_dir / "payback_allowable_capex.csv")
     legacy = pd.read_csv(output_dir / "legacy_comparison.csv")
     hx_segments = pd.read_csv(output_dir / "hx_segments.csv")
     pipeline_scan = pd.read_csv(output_dir / "pipeline_scan_top200.csv")
+    passive_zero_warmup = pd.read_csv(output_dir / "passive_zero_warmup_search.csv")
     sources = _parse_sources(project_root / "docs" / "sources.md")
     assumptions = _parse_assumptions(project_root / "docs" / "assumptions.md")
 
@@ -580,6 +590,8 @@ def build_report(project_root: Path) -> Path:
     recover_35km = temperature[
         (temperature["status"] == "feasible") & (temperature["long_distance_meets_load"] == True)
     ].sort_values("pump_power_kw")
+    best_auxiliary = auxiliary_heat.sort_values("net_power_saving_kw", ascending=False).iloc[0]
+    practical_passive = passive_zero_warmup[passive_zero_warmup["practical_zero_warmup_design_found"] == True].copy()
 
     annual_report = annual.copy()
     annual_report["항목"] = annual_report["metric"].replace(
@@ -878,6 +890,29 @@ def build_report(project_root: Path) -> Path:
     else:
         closure_interpretation_text = "현재 탐색 범위에서는 무보조 warm-up 성립거리 해석을 위한 추가 후보가 충분하지 않았다."
 
+    if practical_passive.empty:
+        practical_passive_text = (
+            "다만 공격적 passive heat 탐색에서 형식적으로 warm-up-free 점이 몇 개 나타나더라도, "
+            "최소 단열 두께 50 mm와 passive heat 의존도 25% 이하라는 현실성 필터를 적용하면 "
+            "현재는 **실무적으로 남는 무보조 해가 없었다**. 즉 무보조 성립은 가능성의 증거이지, 바로 채택 가능한 설계의 증거는 아니다."
+        )
+    else:
+        best_practical_passive = practical_passive.sort_values(
+            ["best_design_pump_power_kw", "minimum_supplemental_warmup_kw"]
+        ).iloc[0]
+        practical_passive_text = (
+            f"현실성 필터를 거친 뒤에도 **{_format_number(best_practical_passive['target_distance_km'])} km / "
+            f"{_format_number(best_practical_passive['supply_temp_c'])} °C / {best_practical_passive['fluid']}** "
+            "조합은 무보조 성립점으로 남았다. 따라서 향후에는 이 practical warm-up-free 해를 중심으로 설계를 다시 좁혀볼 가치가 있다."
+        )
+
+    auxiliary_heat_text = (
+        f"보조 열원이 완전히 사라지지 않는다면, 현재 구성된 하이브리드 시나리오 중에서는 "
+        f"**{best_auxiliary['scenario_label']}**가 가장 유리했다. 이 경우 총 시스템 동력은 "
+        f"**{_format_number(best_auxiliary['total_system_power_kw'])} kW**이고, 기준선 대비 순절감은 "
+        f"**{_format_number(best_auxiliary['net_power_saving_kw'])} kW**다."
+    )
+
     ctx: dict[str, object] = {
         "input_conditions_md": input_conditions_md,
         "load_table_md": load_table_md,
@@ -937,6 +972,8 @@ def build_report(project_root: Path) -> Path:
         "best_closure_distance_km": _format_number(best_closure["ambient_only_closure_distance_km"]) if best_closure is not None else "-",
         "best_closure_pump_kw": _format_number(best_closure["pump_power_kw"]) if best_closure is not None else "-",
         "closure_interpretation_text": closure_interpretation_text,
+        "practical_passive_text": practical_passive_text,
+        "auxiliary_heat_text": auxiliary_heat_text,
     }
 
     report_path = deliverables_dir / "report_draft.md"
@@ -960,9 +997,13 @@ def build_presentation_script(project_root: Path) -> Path:
     distance = pd.read_csv(output_dir / "distance_scenarios.csv")
     temperature = pd.read_csv(output_dir / "supply_temperature_sweep.csv")
     annual = pd.read_csv(output_dir / "annual_summary.csv")
+    auxiliary_heat = pd.read_csv(output_dir / "auxiliary_heat_sources.csv")
+    passive_zero_warmup = pd.read_csv(output_dir / "passive_zero_warmup_search.csv")
     selected_alternative = alternatives.iloc[0]
     long_distance = distance.sort_values("distance_km").iloc[-1]
     high_temp = temperature[(temperature["status"] == "feasible") & (temperature["long_distance_meets_load"] == True)].head(1)
+    best_auxiliary = auxiliary_heat.sort_values("net_power_saving_kw", ascending=False).iloc[0]
+    practical_passive = passive_zero_warmup[passive_zero_warmup["practical_zero_warmup_design_found"] == True].copy()
     annual_map = {
         str(row["metric"]): {
             "value": float(row["value"]),
@@ -1027,11 +1068,13 @@ def build_presentation_script(project_root: Path) -> Path:
         "",
         "## 슬라이드 14. 순환 배관 설계 - 공급온도 민감도",
         "- 공급온도를 높이면 성립거리는 늘어나지만, 유체 선택과 펌프동력이 같이 바뀐다고 설명한다.",
+        "- 공격적 passive heat 탐색에선 무보조 점이 나오더라도, 현실성 필터를 거치면 현재는 채택 가능한 무보조 해가 남지 않는다고 덧붙인다.",
         "",
         "## 슬라이드 15. 열역학/경제성 평가 - 소비동력 비교",
         f"- 이론 최소동력은 {_format_number(float(summary['Theoretical minimum power']['value']))} kW다.",
         f"- 기준 R-134a 압축기 동력은 {_format_number(float(summary['Baseline R-134a compressor power']['value']))} kW다.",
         f"- LNG 루프 펌프동력은 {_format_number(float(summary['LNG system pump power']['value']))} kW 수준이며, 이것이 핵심 에너지 논거라고 설명한다.",
+        f"- 만약 보조 열원이 남는다면, 현재 시나리오 중 최선은 {best_auxiliary['scenario_label']}이고 총 시스템 동력은 {_format_number(best_auxiliary['total_system_power_kw'])} kW라고 설명한다.",
         "",
         "## 슬라이드 16. 열역학/경제성 평가 - 연간 효과와 회수기간",
         f"- 연간 전력 절감량은 {_format_number(annual_map['Electricity saving']['value'])} MWh/년이다.",
@@ -1058,6 +1101,10 @@ def build_presentation_script(project_root: Path) -> Path:
         )
     script_lines.extend(
         [
+            (
+                "- 현실성 필터 결과 "
+                + ("채택 가능한 무보조 해가 남는다고 설명한다." if not practical_passive.empty else "채택 가능한 무보조 해는 아직 없다고 정리한다.")
+            ),
             "- 마지막 문장은 이번 발표가 A11 스타일의 공학 발표 흐름을 유지하면서도 코드 기반 재현성과 민감도 분석을 추가했다는 점으로 마무리한다.",
         ]
     )

@@ -103,6 +103,8 @@ const distanceRows = readCsv("distance_scenarios.csv");
 const supplyRows = readCsv("supply_temperature_sweep.csv");
 const annualRows = readCsv("annual_summary.csv");
 const alternativeRows = readCsv("alternative_designs.csv");
+const auxiliaryHeatRows = readCsv("auxiliary_heat_sources.csv");
+const passiveHeatRows = readCsv("passive_zero_warmup_search.csv");
 
 const longDistance = distanceRows[distanceRows.length - 1];
 const longDistanceKm = toNumber(longDistance.distance_km);
@@ -136,6 +138,10 @@ const topAlternatives = [
   feasibleAlternatives[1] || selectedAlternative,
   feasibleAlternatives[2] || selectedAlternative,
 ];
+const bestAuxiliary = auxiliaryHeatRows
+  .slice()
+  .sort((left, right) => toNumber(right.net_power_saving_kw) - toNumber(left.net_power_saving_kw))[0];
+const practicalPassiveRows = passiveHeatRows.filter((row) => toBool(row.practical_zero_warmup_design_found));
 
 function addBackground(slide) {
   slide.background = { color: colors.white };
@@ -670,12 +676,14 @@ function buildDeck() {
           `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`,
           `현재 기본안만으로도 ${formatNumber(longDistanceKm, 0)} km 조건이 성립한다.`,
           "따라서 공급온도 스윕은 거리 복구보다 여유와 펌프동력 변화의 trade-off를 읽는 도구가 된다.",
+          practicalPassiveRows.length === 0 ? "다만 현실성 필터를 거치면 현재는 채택 가능한 무보조 해가 남지 않는다." : "현실성 필터를 거친 무보조 해도 일부 남아 있어 후속 설계 후보가 된다.",
           "온도 수준이 바뀌면 유체 선택과 최적 거리 여유도 함께 바뀐다.",
         ]
       : [
           `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`,
           `공급온도를 ${formatNumber(recover35Row.supply_temp_k, 0)} K까지 높이면 ${formatNumber(longDistanceKm, 0)} km 조건을 회복할 수 있다.`,
           `하지만 그 과정에서 우선 유체가 ${recover35Row.selected_fluid}로 바뀌고 펌프동력은 크게 증가한다.`,
+          practicalPassiveRows.length === 0 ? "또한 무보조 점이 나와도 현실성 필터를 통과하는 해는 아직 없다." : "현실성 필터를 통과하는 무보조 해는 제한적으로만 남는다.",
           "즉 거리 회복은 가능하지만 공짜는 아니다.",
         ];
     addBullets(slide, 7.55, 1.55, 4.9, temperatureBullets, 15.8);
@@ -704,6 +712,7 @@ function buildDeck() {
     addBullets(slide, 7.5, 1.55, 5.0, [
       `이론 최소동력은 ${formatNumber(toNumber(summary["Theoretical minimum power"].value) / 1000.0, 2)} MW, 기준 압축기 동력은 ${formatNumber(toNumber(summary["Baseline R-134a compressor power"].value) / 1000.0, 2)} MW다.`,
       `LNG 시스템의 직접적 전력 소모는 루프 펌프 ${formatNumber(toNumber(summary["LNG system pump power"].value), 1)} kW 수준이다.`,
+      `보조 열원이 남는다면 현재 시나리오 중 최선은 ${bestAuxiliary.scenario_label}이며 총 시스템 동력은 ${formatNumber(toNumber(bestAuxiliary.total_system_power_kw), 1)} kW다.`,
       "이 결과는 LNG 냉열 활용이 압축기 동력을 거의 제거하는 구조임을 보여준다.",
     ], 16);
     addMetricBox(slide, 7.75, 4.95, 1.55, 0.95, "이론 최소", `${formatNumber(toNumber(summary["Theoretical minimum power"].value) / 1000.0, 2)} MW`, "하한", colors.gold);
@@ -724,6 +733,7 @@ function buildDeck() {
     addMetricBox(slide, 9.65, 3.05, 2.65, 1.0, "5년 허용 CAPEX", formatNumber(toNumber(summary["Allowable incremental CAPEX at 5-year payback"].value) / 1_000_000.0, 1), "백만원", colors.red);
     addSoftBox(slide, 6.75, 4.5, 5.55, 1.15, "해석 범위", [
       "현재 연간 효과는 기준 압축기 동력과 LNG 루프 펌프동력만 비교한 경계조건 결과다.",
+      "하이브리드 보조 열원은 별도 시나리오 테이블로 해석한다.",
     ]);
     addFooterNote(slide, "현재 버전은 보조기기·유지관리·금융비용을 아직 제외");
     finalizeSlide(slide);
