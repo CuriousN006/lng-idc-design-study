@@ -148,4 +148,14 @@ def validate_run(
     if annual["avoided_emissions_tco2_per_year"] <= 0.0:
         raise AssertionError("Annual avoided emissions should be positive for the selected LNG design.")
     messages.append("Annualized cost saving and avoided emissions are both positive.")
+
+    auxiliary_heat_sources = system_eval.get("auxiliary_heat_sources", {}).get("table")
+    if auxiliary_heat_sources is None or auxiliary_heat_sources.empty:
+        raise AssertionError("Auxiliary heat-source scenario table should not be empty.")
+    best_auxiliary = system_eval["auxiliary_heat_sources"]["selected"]
+    if best_auxiliary is None:
+        raise AssertionError("A best auxiliary heat-source scenario should be selected.")
+    messages.append(
+        f"Configured hybrid warm-up scenarios rank {best_auxiliary['scenario_label']} best at {best_auxiliary['total_system_power_kw']:.1f} kW total power."
+    )
     return messages

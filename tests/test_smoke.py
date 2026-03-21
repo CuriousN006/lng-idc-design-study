@@ -95,6 +95,8 @@ class SmokeTest(unittest.TestCase):
         self.assertIsNotNone(long_search["near_best"])
         self.assertGreater(float(long_search["near_best"]["minimum_supplemental_warmup_kw"]), 0.0)
         self.assertGreater(system_eval["annual"]["cost_saving_krw_per_year"], 0.0)
+        self.assertFalse(system_eval["auxiliary_heat_sources"]["table"].empty)
+        self.assertIsNotNone(system_eval["auxiliary_heat_sources"]["selected"])
 
     def test_build_deliverables(self) -> None:
         run_all(self.project_root / "config" / "base.toml", parallel=False)
@@ -181,6 +183,29 @@ class SmokeTest(unittest.TestCase):
         for column in ["pump_power_kw", "supplemental_warmup_kw", "max_feasible_distance_km"]:
             for serial_value, parallel_value in zip(sweep_serial[column], sweep_parallel[column], strict=True):
                 self.assertAlmostEqual(float(serial_value), float(parallel_value), places=6)
+
+    def test_auxiliary_heat_scenarios_rank_monotonically(self) -> None:
+        load_result = compute_load_model(self.config)
+        minimum_power = compute_theoretical_minimum_power(self.config, load_result.total_kw)
+        baseline = compute_baseline_cycle(self.config, load_result.total_kw)
+        screening = compute_fluid_screening(self.config, load_result.total_kw)
+        pipeline_result = design_pipeline(self.config, screening["selected"], load_result.total_kw)
+        hx_result = design_lng_vaporizer(
+            self.config,
+            _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
+            float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
+        )
+        system_eval = evaluate_system(self.config, load_result, minimum_power, baseline, screening, hx_result, pipeline_result)
+        aux_table = system_eval["auxiliary_heat_sources"]["table"].set_index("scenario_key")
+
+        self.assertGreater(
+            float(aux_table.loc["waste_heat_recovery_loop", "net_power_saving_kw"]),
+            float(aux_table.loc["electric_resistance_heater", "net_power_saving_kw"]),
+        )
+        self.assertGreater(
+            float(aux_table.loc["ambient_air_trim_heater", "net_power_saving_kw"]),
+            float(aux_table.loc["electric_resistance_heater", "net_power_saving_kw"]),
+        )
 
 
 if __name__ == "__main__":

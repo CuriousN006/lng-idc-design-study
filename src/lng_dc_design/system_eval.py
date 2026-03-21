@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .auxiliary_heat import evaluate_auxiliary_heat_sources
 from .economics import compute_annual_metrics
 
 
@@ -29,6 +30,7 @@ def evaluate_system(
     equivalent_cop = q_load_kw / pump_kw
     power_saving_kw = baseline["compressor_power_kw"] - pump_kw
     annual_metrics = compute_annual_metrics(config, baseline["compressor_power_kw"], pump_kw)
+    auxiliary_heat_sources = evaluate_auxiliary_heat_sources(config, baseline["compressor_power_kw"], pipeline_result)
 
     rows = [
             {"metric": "IDC total cooling load", "value": q_load_kw, "unit": "kW", "source_ids": "SRC-001,ASM-001,ASM-003,ASM-004,ASM-005,ASM-006,ASM-007,ASM-008,ASM-009,ASM-010,ASM-011"},
@@ -42,6 +44,18 @@ def evaluate_system(
             {"metric": "LNG vaporizer duty", "value": q_lng_kw, "unit": "kW", "source_ids": "SRC-001,SRC-004,SRC-005,SRC-006,SRC-007"},
             {"metric": "Pipeline heat gain", "value": q_env_kw, "unit": "kW", "source_ids": "SRC-001,ASM-014,ASM-015,ASM-016"},
             {"metric": "Supplemental warm-up duty", "value": q_supplemental_kw, "unit": "kW", "source_ids": "SRC-001,SRC-005,ASM-035"},
+            {
+                "metric": "Best-case hybrid auxiliary source",
+                "value": auxiliary_heat_sources["selected"]["scenario_label"] if auxiliary_heat_sources["selected"] else "-",
+                "unit": "-",
+                "source_ids": "ASM-043,ASM-044,ASM-045,ASM-046",
+            },
+            {
+                "metric": "Best-case hybrid total power",
+                "value": auxiliary_heat_sources["selected"]["total_system_power_kw"] if auxiliary_heat_sources["selected"] else pump_kw,
+                "unit": "kW",
+                "source_ids": "SRC-001,SRC-013,ASM-032,ASM-043,ASM-044,ASM-045,ASM-046",
+            },
             {"metric": "Available cooling at IDC", "value": available_to_idc_kw, "unit": "kW", "source_ids": "SRC-001,SRC-005,ASM-014,ASM-015,ASM-016,ASM-035"},
             {"metric": "LNG system pump power", "value": pump_kw, "unit": "kW", "source_ids": "SRC-001,ASM-014,ASM-015,ASM-016"},
             {"metric": "Equivalent cooling COP", "value": equivalent_cop, "unit": "-", "source_ids": "SRC-001,SRC-004,SRC-005"},
@@ -82,4 +96,5 @@ def evaluate_system(
         "equivalent_cop": equivalent_cop,
         "power_saving_kw": power_saving_kw,
         "annual": annual_metrics,
+        "auxiliary_heat_sources": auxiliary_heat_sources,
     }

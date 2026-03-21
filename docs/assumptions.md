@@ -46,3 +46,7 @@
 | ASM-040 | Passive heat-search wind-speed cases | 0, 2, 4 m/s | `SRC-015`의 wind-based outside convection correlation 위에서 자연대류, 약한 바람, 비교적 강한 바람의 탐색용 경계조건을 주기 위한 시나리오 값 |
 | ASM-041 | Passive heat-search net absorbed solar flux | 0, 250, 300 W/m2 | `SRC-017`의 태양복사/기상 데이터 체계 위에서 노출 배관이 받는 순흡수 열유속의 탐색용 envelope를 주기 위한 값이며, 현 단계에서는 site-specific weather replay가 아니라 scenario study용 |
 | ASM-042 | Pump heat returned to loop in passive scenarios | 80% of pump power | 폐회로에서 펌프 소비동력의 대부분이 결국 루프 열로 환원된다는 점을 반영한 탐색용 상한 가정이며, 상세 기기 열수지 없이 과도한 100% 귀속을 피하기 위한 보수적 절충값 |
+| ASM-043 | Electric resistance auxiliary heater model | 1.00 kWe/kWth, fixed 0 kW | supplemental warm-up을 전기저항 가열로 직접 공급하는 최악 전력 페널티 기준선 |
+| ASM-044 | Ambient-air trim heater model | 0.02 kWe/kWth, fixed 15 kW | 저급 외기열을 회수하고 팬/순환펌프 전력만 전기 페널티로 보는 느슨한 보조 가열 시나리오 |
+| ASM-045 | Waste-heat recovery loop model | 0.01 kWe/kWth, fixed 10 kW | 인접 폐열원/온배수 루프에서 열을 받아오고 소규모 순환동력만 부담하는 회수형 시나리오 |
+| ASM-046 | Heat-pump booster model | 0.25 kWe/kWth, fixed 20 kW | 보조 열원을 적극적으로 끌어올리는 소형 heat pump booster의 유효 전력비를 COP 4 수준으로 근사한 시나리오 |

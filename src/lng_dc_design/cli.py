@@ -105,7 +105,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="LNG cold-energy IDC design toolkit")
-    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "scenario-study", "explore-passive-heat", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
+    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "analyze-aux-heat", "scenario-study", "explore-passive-heat", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
     parser.add_argument("--config", required=True, help="Path to TOML configuration file")
     parser.add_argument("--workers", type=int, default=None, help="Override process worker count for parallel commands")
     parser.add_argument("--serial", action="store_true", help="Force serial execution even for commands that default to parallel mode")
@@ -148,6 +148,11 @@ def main() -> int:
         pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
         print(pipeline_result["sensitivity"].to_string(index=False))
         print(pipeline_result["selected_design"])
+        return 0
+
+    if args.command == "analyze-aux-heat":
+        results = run_all(config_path, workers=parallel_options.workers, parallel=parallel_options.enabled)
+        print(results["system"]["auxiliary_heat_sources"]["table"].to_string(index=False))
         return 0
 
     if args.command == "scenario-study":

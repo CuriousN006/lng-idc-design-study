@@ -22,6 +22,7 @@ python -m lng_dc_design run-all --config config/base.toml
 python -m lng_dc_design screen-fluids --config config/base.toml
 python -m lng_dc_design design-hx --config config/base.toml
 python -m lng_dc_design analyze-pipeline --config config/base.toml
+python -m lng_dc_design analyze-aux-heat --config config/base.toml
 python -m lng_dc_design scenario-study --config config/base.toml
 python -m lng_dc_design explore-passive-heat --config config/base.toml
 python -m lng_dc_design build-report --config config/base.toml
@@ -39,6 +40,7 @@ python -m lng_dc_design validate --config config/base.toml
 - `output/distance_scenarios.csv`
 - `output/supply_temperature_sweep.csv`
 - `output/annual_summary.csv`
+- `output/auxiliary_heat_sources.csv`
 - `output/payback_allowable_capex.csv`
 - `output/requirement_traceability.csv`
 - `output/source_map.csv`

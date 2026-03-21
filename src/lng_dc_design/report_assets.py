@@ -279,6 +279,20 @@ def _save_annual_impact(output_dir: Path, annual_metrics: dict) -> None:
     plt.close(fig)
 
 
+def _save_auxiliary_heat_sources(output_dir: Path, auxiliary_heat_sources: pd.DataFrame) -> None:
+    if auxiliary_heat_sources.empty:
+        return
+    ordered = auxiliary_heat_sources.sort_values("net_power_saving_kw", ascending=False)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(ordered["scenario_label"], ordered["net_power_saving_kw"], color="#5c6b73")
+    ax.set_ylabel("Net power saving vs baseline (kW)")
+    ax.set_title("Hybrid Auxiliary-Heat Strategy Comparison")
+    ax.tick_params(axis="x", rotation=20)
+    fig.tight_layout()
+    fig.savefig(output_dir / "auxiliary_heat_sources.png", dpi=180)
+    plt.close(fig)
+
+
 def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
     source_map = {row["metric"]: row["source_ids"] for _, row in system_eval["summary"].iterrows()}
     return pd.DataFrame(
@@ -399,6 +413,7 @@ def write_outputs(
     )
     annual_summary.to_csv(output_dir / "annual_summary.csv", index=False)
     system_eval["annual"]["payback_table"].to_csv(output_dir / "payback_allowable_capex.csv", index=False)
+    system_eval["auxiliary_heat_sources"]["table"].to_csv(output_dir / "auxiliary_heat_sources.csv", index=False)
     if legacy_result and legacy_result.get("available"):
         legacy_result["table"].to_csv(output_dir / "legacy_comparison.csv", index=False)
 
@@ -417,6 +432,7 @@ def write_outputs(
     _save_ambient_closure_map(figure_dir, ambient_closure_map["table"])
     _save_zero_warmup_gap(figure_dir, zero_warmup_target_search["table"])
     _save_annual_impact(figure_dir, system_eval["annual"])
+    _save_auxiliary_heat_sources(figure_dir, system_eval["auxiliary_heat_sources"]["table"])
 
     base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
     base_distance_row = distance_scenarios.loc[base_distance_index]
@@ -455,6 +471,12 @@ def write_outputs(
         f"- Pipeline IDs: **supply {pipeline_result['selected_design']['supply_id_m']:.3f} m / return {pipeline_result['selected_design']['return_id_m']:.3f} m**",
         f"- Selected insulation thickness: **{pipeline_result['selected_design']['insulation_thickness_m']:.3f} m**",
         f"- Supplemental warm-up duty: **{pipeline_result['selected_design']['supplemental_warmup_kw']:.1f} kW**",
+        (
+            f"- Best hybrid auxiliary source: **{system_eval['auxiliary_heat_sources']['selected']['scenario_label']}** "
+            f"with total power **{system_eval['auxiliary_heat_sources']['selected']['total_system_power_kw']:,.1f} kW**"
+        )
+        if system_eval["auxiliary_heat_sources"]["selected"] is not None
+        else "- No auxiliary-heat source scenarios were configured.",
         "",
         "## Scenario Notes",
         "",
@@ -475,9 +497,26 @@ def write_outputs(
         f"- Allowable incremental CAPEX at 5-year payback: **{system_eval['annual']['payback_table'].set_index('payback_years').loc[5, 'allowable_incremental_capex_krw'] / 1_000_000.0:,.1f} million KRW**",
         "- Economic boundary: **baseline compressor power vs LNG loop pump power only**",
         "",
+        "## Hybrid Auxiliary-Heat Scenarios",
+        "",
+    ]
+    if system_eval["auxiliary_heat_sources"]["selected"] is not None:
+        best_aux = system_eval["auxiliary_heat_sources"]["selected"]
+        report_lines.extend(
+            [
+                f"- Best configured source: **{best_aux['scenario_label']}**",
+                f"- Auxiliary electrical penalty: **{best_aux['auxiliary_power_kw']:,.1f} kW**",
+                f"- Total system power including pump and auxiliary source: **{best_aux['total_system_power_kw']:,.1f} kW**",
+                f"- Net power saving versus baseline: **{best_aux['net_power_saving_kw']:,.1f} kW**",
+            ]
+        )
+    report_lines.extend(
+        [
+        "",
         "## Temperature Sensitivity",
         "",
     ]
+    )
     if best_supply_row is not None:
         report_lines.extend(
             [
@@ -572,6 +611,7 @@ def write_outputs(
             "- `output/ambient_closure_map.csv`",
             "- `output/zero_warmup_target_search.csv`",
             "- `output/annual_summary.csv`",
+            "- `output/auxiliary_heat_sources.csv`",
             "- `output/payback_allowable_capex.csv`",
             "- `output/requirement_traceability.csv`",
             "- `output/source_map.csv`",

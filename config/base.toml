@@ -344,6 +344,54 @@ source_id = "SRC-013"
 value = [3, 5, 7, 10]
 source_id = "ASM-031"
 
+[auxiliary_heat_sources.electric_resistance_heater]
+label = "Electric resistance heater"
+description = "Worst-case interpretation where the entire warm-up duty is provided as electric heat."
+
+[auxiliary_heat_sources.electric_resistance_heater.electric_intensity_kw_per_kwth]
+value = 1.0
+source_id = "ASM-043"
+
+[auxiliary_heat_sources.electric_resistance_heater.fixed_parasitic_kw]
+value = 0.0
+source_id = "ASM-043"
+
+[auxiliary_heat_sources.ambient_air_trim_heater]
+label = "Ambient-air trim heater"
+description = "Low-grade ambient heat source with only fan and circulation parasitics counted electrically."
+
+[auxiliary_heat_sources.ambient_air_trim_heater.electric_intensity_kw_per_kwth]
+value = 0.02
+source_id = "ASM-044"
+
+[auxiliary_heat_sources.ambient_air_trim_heater.fixed_parasitic_kw]
+value = 15.0
+source_id = "ASM-044"
+
+[auxiliary_heat_sources.waste_heat_recovery_loop]
+label = "Waste-heat recovery loop"
+description = "Recovered low-grade heat from nearby plant or building loops with small pumping parasitics."
+
+[auxiliary_heat_sources.waste_heat_recovery_loop.electric_intensity_kw_per_kwth]
+value = 0.01
+source_id = "ASM-045"
+
+[auxiliary_heat_sources.waste_heat_recovery_loop.fixed_parasitic_kw]
+value = 10.0
+source_id = "ASM-045"
+
+[auxiliary_heat_sources.heat_pump_booster]
+label = "Heat-pump booster"
+description = "Active booster using low-grade heat with effective electrical use approximated from COP."
+
+[auxiliary_heat_sources.heat_pump_booster.electric_intensity_kw_per_kwth]
+value = 0.25
+source_id = "ASM-046"
+
+[auxiliary_heat_sources.heat_pump_booster.fixed_parasitic_kw]
+value = 20.0
+source_id = "ASM-046"
+
 [coolant_candidates.R170]
 display_name = "R-170 (Ethane)"
 coolprop_name = "Ethane"
