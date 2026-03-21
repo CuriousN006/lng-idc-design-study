@@ -123,12 +123,14 @@ def validate_run(
     if long_distance_rows.empty:
         raise AssertionError(f"Configured long-distance checkpoint {target_distance:.1f} m is missing from the sensitivity table.")
     long_distance = long_distance_rows.iloc[0]
-    available_long_distance_kw = float(long_distance["available_cooling_kw"])
-    if bool(long_distance["feasible"]) and available_long_distance_kw >= load_result.total_kw - 1e-6:
-        messages.append("Long-distance pipeline case still satisfies the IDC load.")
+    if bool(long_distance["base_duty_meets_idc_load"]):
+        messages.append("Long-distance pipeline case satisfies the IDC load within the configured base LNG-duty boundary.")
+    elif bool(long_distance["hybrid_load_satisfied"]):
+        messages.append("Long-distance pipeline case is hydraulically/state feasible only when supplemental warm-up and redefined LNG duty are allowed.")
     else:
-        messages.append("Long-distance pipeline case is infeasible at the current duty margin because heat gain exceeds the available buffer.")
-    messages.append(f"Estimated maximum feasible one-way pipeline distance is about {pipeline_result['max_feasible_distance_m'] / 1000.0:.1f} km.")
+        messages.append("Long-distance pipeline case is hydraulically infeasible under the current pressure/phase constraints.")
+    messages.append(f"Estimated maximum hydraulic/state-feasible one-way pipeline distance is about {pipeline_result['max_feasible_distance_m'] / 1000.0:.1f} km.")
+    messages.append(f"Estimated maximum base-duty one-way pipeline distance is about {pipeline_result['max_base_duty_distance_m'] / 1000.0:.1f} km.")
     ambient_only_closure_distance_m = float(pipeline_result.get("ambient_only_closure_distance_m", math.nan))
     if math.isfinite(ambient_only_closure_distance_m):
         messages.append(

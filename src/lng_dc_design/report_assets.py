@@ -159,7 +159,7 @@ def _save_pipeline_distance_sensitivity(output_dir: Path, pipeline_result: dict)
 
 def _save_power_comparison(output_dir: Path, baseline: dict, system_eval: dict) -> None:
     fig, ax = plt.subplots(figsize=(7, 5))
-    labels = ["Baseline VCC", "LNG loop"]
+    labels = ["Baseline VCC", "Core LNG system"]
     values = [baseline["compressor_power_kw"], system_eval["pump_power_kw"]]
     ax.bar(labels, values, color=["#aa4a44", "#3a7ca5"])
     ax.set_ylabel("Power (kW)")
@@ -193,7 +193,7 @@ def _save_alternative_designs(output_dir: Path, scenario_result: dict) -> None:
     feasible = frame[frame["design_feasible"]].copy()
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.bar(feasible["fluid"], feasible["pump_power_kw"], color="#4f6d7a")
-    ax.set_ylabel("Pump power (kW)")
+    ax.set_ylabel("Core system power (kW)")
     ax.set_title("Feasible Coolant Alternatives")
     ax.tick_params(axis="x", rotation=20)
     fig.tight_layout()
@@ -204,9 +204,9 @@ def _save_alternative_designs(output_dir: Path, scenario_result: dict) -> None:
 def _save_supply_temperature_sweep(output_dir: Path, supply_temperature_sweep: pd.DataFrame) -> None:
     feasible = supply_temperature_sweep[supply_temperature_sweep["status"] == "feasible"].copy()
     fig, ax1 = plt.subplots(figsize=(9, 5))
-    ax1.plot(feasible["supply_temp_c"], feasible["pump_power_kw"], marker="o", color="#8b1e3f", label="Pump power")
+    ax1.plot(feasible["supply_temp_c"], feasible["pump_power_kw"], marker="o", color="#8b1e3f", label="Core system power")
     ax1.set_xlabel("Coolant supply temperature (C)")
-    ax1.set_ylabel("Pump power (kW)", color="#8b1e3f")
+    ax1.set_ylabel("Core system power (kW)", color="#8b1e3f")
     ax1.tick_params(axis="y", labelcolor="#8b1e3f")
 
     ax2 = ax1.twinx()
@@ -525,8 +525,8 @@ def write_outputs(
         f"- Total cooling load: **{load_result.total_kw:,.1f} kW**",
         f"- Theoretical minimum power: **{minimum_power['minimum_power_kw']:,.1f} kW**",
         f"- Baseline R-134a power: **{baseline['compressor_power_kw']:,.1f} kW**",
-        f"- LNG loop pump power: **{system_eval['pump_power_kw']:,.1f} kW**",
-        f"- Baseline-to-LNG saving: **{system_eval['power_saving_kw']:,.1f} kW**",
+        f"- Core LNG system electric power: **{system_eval['pump_power_kw']:,.1f} kW**",
+        f"- Baseline-to-core saving: **{system_eval['power_saving_kw']:,.1f} kW**",
         f"- Minimum LNG vaporizer pinch: **{hx_result['min_pinch_k']:.2f} K**",
         "",
         "## Key Design Selections",
@@ -554,21 +554,27 @@ def write_outputs(
         "## Scenario Notes",
         "",
         f"- Base case distance: **{base_distance_row['distance_km']:.1f} km**",
+        f"- Base-case hydraulic/state feasibility: **{bool(base_distance_row['hydraulic_feasible'])}**",
+        f"- Base-case base-duty load satisfaction: **{bool(base_distance_row['base_duty_meets_idc_load'])}**",
+        f"- Base-case supplemental warm-up required: **{bool(base_distance_row['requires_supplemental_warmup'])}**",
         f"- Long-distance check: **{long_distance_row['distance_km']:.1f} km**",
-        f"- Long-distance pump power: **{long_distance_row['pump_power_kw']:,.1f} kW**",
+        f"- Long-distance core-system power: **{long_distance_row['pump_power_kw']:,.1f} kW**",
         f"- Long-distance heat gain: **{long_distance_row['heat_gain_kw']:,.1f} kW**",
         f"- Long-distance supplemental warm-up: **{long_distance_row['supplemental_warmup_kw']:,.1f} kW**",
-        f"- Long-distance load satisfied: **{bool(long_distance_row['meets_idc_load'])}**",
-        f"- Long-distance interpretation: **{'Feasible' if bool(long_distance_row['meets_idc_load']) else 'Infeasible under current duty margin'}**",
+        f"- Long-distance hydraulic/state feasibility: **{bool(long_distance_row['hydraulic_feasible'])}**",
+        f"- Long-distance base-duty load satisfaction: **{bool(long_distance_row['base_duty_meets_idc_load'])}**",
+        f"- Long-distance supplemental warm-up required: **{bool(long_distance_row['requires_supplemental_warmup'])}**",
+        f"- Long-distance interpretation: **{'Hybrid-feasible but base-duty short' if bool(long_distance_row['hybrid_load_satisfied']) and not bool(long_distance_row['base_duty_meets_idc_load']) else ('Base-duty feasible' if bool(long_distance_row['base_duty_meets_idc_load']) else 'Hydraulically infeasible')}**",
         f"- Estimated maximum feasible one-way distance: **{pipeline_result['max_feasible_distance_m'] / 1000.0:,.1f} km**",
+        f"- Estimated maximum base-duty one-way distance: **{pipeline_result['max_base_duty_distance_m'] / 1000.0:,.1f} km**",
         "",
         "## Annual Impact",
         "",
         f"- Annual electricity saving: **{system_eval['annual']['energy_saving_mwh_per_year']:,.1f} MWh/year**",
         f"- Annual electricity cost saving: **{system_eval['annual']['cost_saving_krw_per_year'] / 1_000_000.0:,.1f} million KRW/year**",
         f"- Annual avoided indirect emissions: **{system_eval['annual']['avoided_emissions_tco2_per_year']:,.1f} tCO2/year**",
-        f"- Core installed CAPEX: **{system_eval['capex']['total_capex_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
-        f"- Core-system NPV: **{system_eval['financial_core']['npv_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
+        f"- Core installed CAPEX (10 km base case): **{system_eval['capex']['total_capex_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
+        f"- Core-system NPV (10 km base case): **{system_eval['financial_core']['npv_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
         (
             f"- Core-system IRR: **{system_eval['financial_core']['irr_fraction'] * 100.0:,.2f}%**"
             if pd.notna(system_eval["financial_core"]["irr_fraction"])
@@ -601,7 +607,7 @@ def write_outputs(
         report_lines.extend(
             [
                 f"- Best sweep point by pump power: **{best_supply_row['supply_temp_c']:.1f} C** with **{best_supply_row['selected_fluid']}**",
-                f"- Pump power at best sweep point: **{best_supply_row['pump_power_kw']:,.1f} kW**",
+                f"- Core-system power at best sweep point: **{best_supply_row['pump_power_kw']:,.1f} kW**",
                 f"- Estimated max feasible distance at best sweep point: **{best_supply_row['max_feasible_distance_km']:,.1f} km**",
             ]
         )
@@ -617,7 +623,7 @@ def write_outputs(
         (
             f"- Best ambient-only closure point: **{best_closure['supply_temp_c']:.1f} C / {best_closure['fluid']}**, "
             f"closure distance **{best_closure['ambient_only_closure_distance_km']:.1f} km**, "
-            f"pump power **{best_closure['pump_power_kw']:,.1f} kW**"
+            f"core power **{best_closure['pump_power_kw']:,.1f} kW**"
         )
         if best_closure is not None
         else "- No ambient-only closure point was found within the feasible search space.",
@@ -635,7 +641,7 @@ def write_outputs(
             f"- Best base-distance near-feasible point: **{zero_search_by_distance[base_distance_target]['near_best']['supply_temp_c']:.1f} C / "
             f"{zero_search_by_distance[base_distance_target]['near_best']['fluid']}**, minimum supplemental "
             f"**{zero_search_by_distance[base_distance_target]['near_best']['minimum_supplemental_warmup_kw']:,.1f} kW**, "
-            f"pump **{zero_search_by_distance[base_distance_target]['near_best']['best_design_pump_power_kw']:,.1f} kW**"
+            f"core power **{zero_search_by_distance[base_distance_target]['near_best']['best_design_pump_power_kw']:,.1f} kW**"
         )
         if zero_search_by_distance[base_distance_target]["near_best"] is not None
         else "- No feasible base-distance candidate remained in the target-distance search.",
@@ -646,7 +652,7 @@ def write_outputs(
             f"- Best long-distance near-feasible point: **{zero_search_by_distance[long_distance_target]['near_best']['supply_temp_c']:.1f} C / "
             f"{zero_search_by_distance[long_distance_target]['near_best']['fluid']}**, minimum supplemental "
             f"**{zero_search_by_distance[long_distance_target]['near_best']['minimum_supplemental_warmup_kw']:,.1f} kW**, "
-            f"pump **{zero_search_by_distance[long_distance_target]['near_best']['best_design_pump_power_kw']:,.1f} kW**"
+            f"core power **{zero_search_by_distance[long_distance_target]['near_best']['best_design_pump_power_kw']:,.1f} kW**"
         )
         if zero_search_by_distance[long_distance_target]["near_best"] is not None
         else "- No feasible long-distance candidate remained in the target-distance search.",
@@ -657,7 +663,7 @@ def write_outputs(
     )
     for _, row in scenario_result["alternatives"].iterrows():
         report_lines.append(
-            f"- {row['fluid']}: pump **{row['pump_power_kw']:,.1f} kW**, warm-up **{row.get('supplemental_warmup_kw', 0.0):,.1f} kW**, shell **{row['hx_shell_diameter_m']:.3f} m**, feasible design **{bool(row['design_feasible'])}**"
+            f"- {row['fluid']}: core power **{row['pump_power_kw']:,.1f} kW**, warm-up **{row.get('supplemental_warmup_kw', 0.0):,.1f} kW**, shell **{row['hx_shell_diameter_m']:.3f} m**, feasible design **{bool(row['design_feasible'])}**"
         )
     if legacy_result and legacy_result.get("available"):
         report_lines.extend(

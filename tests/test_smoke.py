@@ -10,6 +10,7 @@ from lng_dc_design.baseline_vcc import compute_baseline_cycle
 from lng_dc_design.cli import run_all
 from lng_dc_design.config import load_config
 from lng_dc_design.deliverables import build_deliverables
+from lng_dc_design.economics import compute_financial_metrics
 from lng_dc_design.fluid_screening import compute_fluid_screening
 from lng_dc_design.hx_lng_vaporizer import design_lng_vaporizer
 from lng_dc_design.idc_hx import evaluate_idc_heat_exchange
@@ -93,11 +94,42 @@ class SmokeTest(unittest.TestCase):
         )
         self.assertGreaterEqual(float(pipeline_result["selected_design"]["supplemental_warmup_kw"]), 0.0)
         self.assertFalse(scenario_result["alternatives"].empty)
-        self.assertTrue(bool(distance_scenarios.iloc[0]["meets_idc_load"]))
+        self.assertTrue(
+            (
+                distance_scenarios["pump_power_kw"]
+                - distance_scenarios["lng_loop_pump_power_kw"]
+                - distance_scenarios["idc_secondary_loop_pump_power_kw"]
+            ).abs().max()
+            < 1e-6
+        )
+        base_distance_row = distance_scenarios.loc[
+            (distance_scenarios["distance_m"] - float(self.config["assignment"]["pipeline_distance_m"])).abs() < 1e-6
+        ].iloc[0]
+        self.assertTrue(bool(base_distance_row["hydraulic_feasible"]))
+        self.assertTrue(bool(base_distance_row["hybrid_load_satisfied"]))
+        self.assertGreater(float(base_distance_row["supplemental_warmup_kw"]), 0.0)
+        self.assertLess(float(base_distance_row["base_duty_margin_kw"]), 0.0)
+        self.assertFalse(bool(base_distance_row["base_duty_meets_idc_load"]))
         target_distance_m = float(self.config["system_targets"]["long_distance_pipeline_m"])
         self.assertIn(target_distance_m, set(distance_scenarios["distance_m"].tolist()))
+        long_distance_row = distance_scenarios.loc[
+            (distance_scenarios["distance_m"] - target_distance_m).abs() < 1e-6
+        ].iloc[0]
+        self.assertTrue(bool(long_distance_row["hydraulic_feasible"]))
+        self.assertTrue(bool(long_distance_row["hybrid_load_satisfied"]))
+        self.assertGreater(float(long_distance_row["supplemental_warmup_kw"]), 0.0)
+        self.assertLess(float(long_distance_row["base_duty_margin_kw"]), 0.0)
+        self.assertFalse(bool(long_distance_row["base_duty_meets_idc_load"]))
         self.assertGreaterEqual(len(supply_temperature_sweep), 2)
         self.assertIn("feasible", set(supply_temperature_sweep["status"].tolist()))
+        self.assertTrue(
+            (
+                supply_temperature_sweep["pump_power_kw"]
+                - supply_temperature_sweep["lng_loop_pump_power_kw"]
+                - supply_temperature_sweep["idc_secondary_loop_pump_power_kw"]
+            ).dropna().abs().max()
+            < 1e-6
+        )
         self.assertFalse(ambient_closure_map["table"].empty)
         self.assertIsNotNone(ambient_closure_map["selected"])
         self.assertGreater(
@@ -124,6 +156,11 @@ class SmokeTest(unittest.TestCase):
         self.assertTrue(built["report"].exists())
         self.assertTrue(built["script"].exists())
         self.assertTrue(built["presentation"].exists())
+        report_text = built["report"].read_text(encoding="utf-8")
+        script_text = built["script"].read_text(encoding="utf-8")
+        self.assertNotIn("Baseline compressor power vs LNG loop pump power only", report_text)
+        self.assertIn("하이브리드 성립, 기본 LNG duty 불성립", report_text)
+        self.assertIn("하이브리드 성립, 기본 LNG duty 불성립", script_text)
 
     def test_pipeline_thermal_case_extensions(self) -> None:
         load_result = compute_load_model(self.config)
@@ -255,6 +292,35 @@ class SmokeTest(unittest.TestCase):
         result = evaluate_uncertainty_study(trial_config)
         self.assertEqual(len(result["samples"]), 8)
         self.assertIn("selected_fluid: most_common", set(result["summary"]["metric"].tolist()))
+        self.assertTrue(
+            (
+                result["samples"]["pump_power_kw"]
+                - result["samples"]["lng_loop_pump_power_kw"]
+                - result["samples"]["idc_secondary_loop_pump_power_kw"]
+            ).abs().max()
+            < 1e-6
+        )
+        self.assertIn("core_system_power_kw: mean", set(result["summary"]["metric"].tolist()))
+
+    def test_discounted_payback_includes_salvage(self) -> None:
+        no_salvage_config = deepcopy(self.config)
+        no_salvage_config["economic_inputs"]["financial"]["salvage_fraction_of_capex"] = 0.0
+        no_salvage_config["economic_inputs"]["financial"]["project_life_years"] = 5
+        salvage_config = deepcopy(self.config)
+        salvage_config["economic_inputs"]["financial"]["salvage_fraction_of_capex"] = 0.25
+        salvage_config["economic_inputs"]["financial"]["project_life_years"] = 5
+        no_salvage_metrics = compute_financial_metrics(
+            no_salvage_config,
+            total_capex_krw=1_000.0,
+            annual_cost_saving_krw=230.0,
+        )
+        metrics = compute_financial_metrics(
+            salvage_config,
+            total_capex_krw=1_000.0,
+            annual_cost_saving_krw=230.0,
+        )
+        self.assertTrue(pd.isna(no_salvage_metrics["discounted_payback_years"]))
+        self.assertFalse(pd.isna(metrics["discounted_payback_years"]))
 
     def test_idc_secondary_loop_scan_behaviour(self) -> None:
         load_result = compute_load_model(self.config)

@@ -35,7 +35,7 @@
 | ASM-029 | Supply-temperature sweep method | Only supply temperature is perturbed, and the IDC-side HX is re-solved at each sweep point | 운전 온도 수준 변화를 보되, 부하측 열교환기와 환수온도는 매번 다시 맞추는 물리 결합형 sweep 규칙 |
 | ASM-030 | Annual operating hours | 8,760 h/year | 데이터센터의 연중 상시 운전을 반영한 연간화 기준 |
 | ASM-031 | Simple payback targets | 3, 5, 7, 10 years | 추가 투자 허용범위를 빠르게 읽기 위한 경제성 지표 |
-| ASM-032 | Economic comparison boundary | Baseline compressor power vs LNG loop pump power only | 냉각 시스템 핵심 동력 비교이며, 상세 O&M/보조기기/금융비용은 v1 범위 밖 |
+| ASM-032 | Economic comparison boundary | Baseline compressor power vs core LNG system electric demand (LNG external loop pump + IDC secondary-loop pump) | 기준 증기압축 시스템과 LNG 기반 대안의 핵심 전동부하를 같은 경계에서 비교하기 위한 기본 경제성 경계 |
 | ASM-033 | IDC-side HX overall U | 850 W/m2-K | 액체-액체 열교환기의 1차 설계용 보수적 overall U 기본값 |
 | ASM-034 | Chilled-water specific heat | 4,180 J/kg-K | 7/12°C 단상 냉수의 대표 비열값 |
 | ASM-035 | IDC-side HX model structure | Counterflow 2-point pinch model with 7/12°C chilled water and minimum approach constraint | IDC 부하측 열교환기와 2차 루프를 전체 네트워크 없이도 물리적으로 연결하기 위한 최소 모델 |

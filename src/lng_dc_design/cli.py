@@ -220,7 +220,7 @@ def main() -> int:
                     print(
                         f"{target_distance_m / 1000.0:.1f} km: warm-up-free design found at "
                         f"{warmup_free['supply_temp_c']:.1f} C / {warmup_free['fluid']}, "
-                        f"pump {warmup_free['best_design_pump_power_kw']:.1f} kW"
+                        f"core power {warmup_free['best_design_pump_power_kw']:.1f} kW"
                     )
                 elif near_best is not None:
                     print(
@@ -233,7 +233,7 @@ def main() -> int:
                 if practical_warmup_free is not None:
                     print(
                         f"  practical filter: retained at {practical_warmup_free['supply_temp_c']:.1f} C / "
-                        f"{practical_warmup_free['fluid']}, pump {practical_warmup_free['best_design_pump_power_kw']:.1f} kW"
+                        f"{practical_warmup_free['fluid']}, core power {practical_warmup_free['best_design_pump_power_kw']:.1f} kW"
                     )
                 else:
                     print("  practical filter: no warm-up-free design survived")

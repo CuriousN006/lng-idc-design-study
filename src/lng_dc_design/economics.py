@@ -130,6 +130,8 @@ def compute_financial_metrics(config: dict, total_capex_krw: float, annual_cost_
     cumulative = -total_capex_krw
     for year in range(1, project_life_years + 1):
         discounted_cashflow = net_annual_cashflow_krw / (1.0 + discount_rate_fraction) ** year
+        if year == project_life_years and salvage_fraction_of_capex > 0.0:
+            discounted_cashflow += total_capex_krw * salvage_fraction_of_capex / (1.0 + discount_rate_fraction) ** year
         previous_cumulative = cumulative
         cumulative += discounted_cashflow
         if cumulative >= 0.0:

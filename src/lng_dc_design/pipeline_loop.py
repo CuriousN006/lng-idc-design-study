@@ -172,19 +172,27 @@ def _evaluate_pipeline_case(
         return_to_lng_temp_k = 0.5 * (return_to_lng_temp_k + new_return_to_lng_temp_k)
 
     pump_power_w = (dp_supply * q_supply + dp_return * q_return) / pipe_cfg["pump_isentropic_efficiency"]
-    available_cooling_kw = actual_lng_duty_kw - heat_gain_kw - supplemental_reheat_kw
+    tolerance_kw = 1e-6
+    base_duty_available_cooling_kw = total_lng_duty_kw - heat_gain_kw - supplemental_reheat_kw
+    hybrid_available_cooling_kw = actual_lng_duty_kw - heat_gain_kw - supplemental_reheat_kw
+    available_cooling_kw = hybrid_available_cooling_kw
     design_target_margin_kw = total_lng_duty_kw - heat_gain_kw - required_cooling_kw
     heat_gain_fraction = heat_gain_kw / max(actual_lng_duty_kw, 1e-9)
     hot_end_margin_k = return_to_lng_temp_k - minimum_return_to_lng_k
-    thermal_margin_kw = available_cooling_kw - required_cooling_kw
+    base_duty_margin_kw = base_duty_available_cooling_kw - required_cooling_kw
+    thermal_margin_kw = hybrid_available_cooling_kw - required_cooling_kw
     actual_utilization_fraction = required_cooling_kw / max(actual_lng_duty_kw, 1e-9)
     return_phase = phase_si("T", return_to_lng_temp_k, "P", pressure_pa, fluid)
-    feasible = (
+    hydraulic_feasible = (
         velocity_supply <= pipe_cfg["max_liquid_velocity_m_per_s"]
         and velocity_return <= pipe_cfg["max_liquid_velocity_m_per_s"]
         and hot_end_margin_k >= -1e-6
         and "liquid" in return_phase
     )
+    requires_supplemental_warmup = supplemental_reheat_kw > tolerance_kw
+    within_design_lng_duty = actual_lng_duty_kw <= total_lng_duty_kw + tolerance_kw
+    base_duty_meets_idc_load = hydraulic_feasible and base_duty_margin_kw >= -tolerance_kw
+    hybrid_load_satisfied = hydraulic_feasible and thermal_margin_kw >= -tolerance_kw
 
     return {
         "distance_m": distance_m,
@@ -201,18 +209,26 @@ def _evaluate_pipeline_case(
         "heat_gain_kw": heat_gain_kw,
         "heat_gain_fraction": heat_gain_fraction,
         "supplemental_warmup_kw": supplemental_reheat_kw,
+        "requires_supplemental_warmup": requires_supplemental_warmup,
         "actual_lng_duty_kw": actual_lng_duty_kw,
         "actual_utilization_fraction": actual_utilization_fraction,
         "pump_power_kw": pump_power_w / 1000.0,
         "available_cooling_kw": available_cooling_kw,
+        "hybrid_available_cooling_kw": hybrid_available_cooling_kw,
+        "base_duty_available_cooling_kw": base_duty_available_cooling_kw,
         "thermal_margin_kw": thermal_margin_kw,
+        "base_duty_margin_kw": base_duty_margin_kw,
         "design_target_margin_kw": design_target_margin_kw,
         "return_to_lng_temp_k": return_to_lng_temp_k,
         "minimum_return_to_lng_k": minimum_return_to_lng_k,
         "hot_end_margin_k": hot_end_margin_k,
         "return_phase": return_phase,
-        "meets_utilization_target": design_target_margin_kw >= -1e-6,
-        "feasible": feasible,
+        "meets_utilization_target": within_design_lng_duty,
+        "within_design_lng_duty": within_design_lng_duty,
+        "base_duty_meets_idc_load": base_duty_meets_idc_load,
+        "hybrid_load_satisfied": hybrid_load_satisfied,
+        "hydraulic_feasible": hydraulic_feasible,
+        "feasible": hydraulic_feasible,
         "thermal_mode": str(thermal["mode"]),
     }
 
@@ -253,7 +269,7 @@ def _estimate_max_feasible_distance(
         thermal_case,
     )
 
-    while bool(upper_case["feasible"]) and upper < 250_000.0:
+    while bool(upper_case["hydraulic_feasible"]) and upper < 250_000.0:
         lower = upper
         upper *= 1.5
         upper_case = _evaluate_pipeline_case(
@@ -273,7 +289,7 @@ def _estimate_max_feasible_distance(
             thermal_case,
         )
 
-    if bool(upper_case["feasible"]):
+    if bool(upper_case["hydraulic_feasible"]):
         return upper
 
     for _ in range(25):
@@ -294,7 +310,91 @@ def _estimate_max_feasible_distance(
             mid,
             thermal_case,
         )
-        if bool(mid_case["feasible"]):
+        if bool(mid_case["hydraulic_feasible"]):
+            lower = mid
+        else:
+            upper = mid
+    return lower
+
+
+def _estimate_max_base_duty_distance(
+    config: dict,
+    fluid: str,
+    pressure_pa: float,
+    required_cooling_kw: float,
+    total_lng_duty_kw: float,
+    mass_flow_kg_s: float,
+    after_idc_temp_k: float,
+    minimum_return_to_lng_k: float,
+    minimum_line_heat_gain_required_kw: float,
+    selected: dict[str, float],
+    thermal_case: dict[str, float | str] | None = None,
+) -> float:
+    lower = 0.0
+    upper = max(
+        config["assignment"]["pipeline_distance_m"],
+        config["system_targets"]["long_distance_pipeline_m"],
+    )
+
+    upper_case = _evaluate_pipeline_case(
+        config,
+        fluid,
+        pressure_pa,
+        required_cooling_kw,
+        total_lng_duty_kw,
+        mass_flow_kg_s,
+        after_idc_temp_k,
+        minimum_return_to_lng_k,
+        minimum_line_heat_gain_required_kw,
+        selected["supply_id_m"],
+        selected["return_id_m"],
+        selected["insulation_thickness_m"],
+        upper,
+        thermal_case,
+    )
+
+    while bool(upper_case["base_duty_meets_idc_load"]) and upper < 250_000.0:
+        lower = upper
+        upper *= 1.5
+        upper_case = _evaluate_pipeline_case(
+            config,
+            fluid,
+            pressure_pa,
+            required_cooling_kw,
+            total_lng_duty_kw,
+            mass_flow_kg_s,
+            after_idc_temp_k,
+            minimum_return_to_lng_k,
+            minimum_line_heat_gain_required_kw,
+            selected["supply_id_m"],
+            selected["return_id_m"],
+            selected["insulation_thickness_m"],
+            upper,
+            thermal_case,
+        )
+
+    if bool(upper_case["base_duty_meets_idc_load"]):
+        return upper
+
+    for _ in range(25):
+        mid = 0.5 * (lower + upper)
+        mid_case = _evaluate_pipeline_case(
+            config,
+            fluid,
+            pressure_pa,
+            required_cooling_kw,
+            total_lng_duty_kw,
+            mass_flow_kg_s,
+            after_idc_temp_k,
+            minimum_return_to_lng_k,
+            minimum_line_heat_gain_required_kw,
+            selected["supply_id_m"],
+            selected["return_id_m"],
+            selected["insulation_thickness_m"],
+            mid,
+            thermal_case,
+        )
+        if bool(mid_case["base_duty_meets_idc_load"]):
             lower = mid
         else:
             upper = mid
@@ -332,7 +432,7 @@ def _estimate_ambient_only_closure_distance(
         max_feasible_distance_m,
         thermal_case,
     )
-    if (not bool(upper_case["feasible"])) or float(upper_case["supplemental_warmup_kw"]) > tolerance_kw:
+    if (not bool(upper_case["hydraulic_feasible"])) or float(upper_case["supplemental_warmup_kw"]) > tolerance_kw:
         return math.nan
 
     lower_case = _evaluate_pipeline_case(
@@ -351,7 +451,7 @@ def _estimate_ambient_only_closure_distance(
         0.0,
         thermal_case,
     )
-    if bool(lower_case["feasible"]) and float(lower_case["supplemental_warmup_kw"]) <= tolerance_kw:
+    if bool(lower_case["hydraulic_feasible"]) and float(lower_case["supplemental_warmup_kw"]) <= tolerance_kw:
         return 0.0
 
     lower = 0.0
@@ -374,7 +474,7 @@ def _estimate_ambient_only_closure_distance(
             mid,
             thermal_case,
         )
-        if bool(mid_case["feasible"]) and float(mid_case["supplemental_warmup_kw"]) <= tolerance_kw:
+        if bool(mid_case["hydraulic_feasible"]) and float(mid_case["supplemental_warmup_kw"]) <= tolerance_kw:
             upper = mid
         else:
             lower = mid
@@ -481,6 +581,19 @@ def design_pipeline(
         max_feasible_distance_m,
         thermal_case=thermal_case,
     )
+    max_base_duty_distance_m = _estimate_max_base_duty_distance(
+        config,
+        fluid,
+        pressure_pa,
+        required_cooling_kw,
+        total_lng_duty_kw,
+        mass_flow_kg_s,
+        after_idc_temp_k,
+        minimum_return_to_lng_k,
+        minimum_line_heat_gain_required_kw,
+        selected,
+        thermal_case,
+    )
 
     return {
         "scan_table": frame.reset_index(drop=True),
@@ -489,6 +602,7 @@ def design_pipeline(
         "target_heat_gain_kw": total_lng_duty_kw - required_cooling_kw,
         "base_distance_m": config["assignment"]["pipeline_distance_m"],
         "max_feasible_distance_m": max_feasible_distance_m,
+        "max_base_duty_distance_m": max_base_duty_distance_m,
         "ambient_only_closure_distance_m": ambient_only_closure_distance_m,
         "after_idc_temp_k": after_idc_temp_k,
         "return_to_lng_temp_k": float(selected["return_to_lng_temp_k"]),

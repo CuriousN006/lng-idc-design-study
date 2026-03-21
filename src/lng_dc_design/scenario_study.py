@@ -9,6 +9,7 @@ from .baseline_vcc import compute_baseline_cycle
 from .economics import add_annualized_columns
 from .fluid_screening import compute_fluid_screening
 from .hx_lng_vaporizer import design_lng_vaporizer
+from .idc_secondary_loop import evaluate_idc_secondary_loop
 from .load_model import compute_load_model
 from .parallel import ParallelOptions, map_items
 from .pipeline_loop import design_pipeline
@@ -29,6 +30,17 @@ def _target_distance_row(sensitivity: pd.DataFrame, target_distance_m: float) ->
     return sensitivity.iloc[(sensitivity["distance_m"] - target_distance_m).abs().argmin()]
 
 
+def _idc_secondary_loop_pump_power_kw(config: dict, required_cooling_kw: float) -> float:
+    assignment = config["assignment"]
+    idc_hx = config["idc_hx"]
+    chilled_delta_t_k = float(assignment["chilled_water_return_temp_k"]) - float(assignment["chilled_water_supply_temp_k"])
+    chilled_water_mass_flow_kg_s = required_cooling_kw * 1000.0 / (
+        float(idc_hx["chilled_water_cp_j_per_kgk"]) * chilled_delta_t_k
+    )
+    idc_secondary_loop_result = evaluate_idc_secondary_loop(config, chilled_water_mass_flow_kg_s)
+    return float(idc_secondary_loop_result["selected_design"]["pump_power_kw"])
+
+
 def evaluate_feasible_alternatives(
     config: dict,
     load_result: object,
@@ -38,6 +50,7 @@ def evaluate_feasible_alternatives(
 ) -> dict[str, object]:
     feasible_candidates = screening["table"][screening["table"]["feasible"]].copy()
     options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(config, load_result.total_kw)
     rows = map_items(
         _evaluate_feasible_alternative_task,
         [
@@ -46,6 +59,7 @@ def evaluate_feasible_alternatives(
                 "candidate": candidate.to_dict(),
                 "required_cooling_kw": load_result.total_kw,
                 "baseline_power_kw": baseline["compressor_power_kw"],
+                "idc_secondary_loop_pump_kw": idc_secondary_loop_pump_kw,
             }
             for _, candidate in feasible_candidates.iterrows()
         ],
@@ -68,12 +82,18 @@ def evaluate_feasible_alternatives(
 
 
 def build_distance_scenarios(config: dict, load_result: object, baseline: dict, hx_result: dict, pipeline_result: dict) -> pd.DataFrame:
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(config, load_result.total_kw)
     rows: list[dict[str, float | bool]] = []
     for _, sensitivity_row in pipeline_result["sensitivity"].iterrows():
-        pump_power_kw = float(sensitivity_row["pump_power_kw"])
+        lng_loop_pump_power_kw = float(sensitivity_row["pump_power_kw"])
+        core_system_power_kw = lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
         heat_gain_kw = float(sensitivity_row["heat_gain_kw"])
         supplemental_warmup_kw = float(sensitivity_row["supplemental_warmup_kw"])
-        available_cooling_kw = hx_result["required_lng_duty_kw"] - heat_gain_kw - supplemental_warmup_kw
+        base_duty_available_cooling_kw = float(sensitivity_row["base_duty_available_cooling_kw"])
+        hybrid_available_cooling_kw = float(sensitivity_row["hybrid_available_cooling_kw"])
+        hydraulic_feasible = bool(sensitivity_row["hydraulic_feasible"])
+        base_duty_meets_idc_load = bool(sensitivity_row["base_duty_meets_idc_load"])
+        hybrid_load_satisfied = bool(sensitivity_row["hybrid_load_satisfied"])
         rows.append(
             {
                 "distance_m": float(sensitivity_row["distance_m"]),
@@ -81,15 +101,27 @@ def build_distance_scenarios(config: dict, load_result: object, baseline: dict, 
                 "heat_gain_kw": heat_gain_kw,
                 "heat_gain_fraction": float(sensitivity_row["heat_gain_fraction"]),
                 "supplemental_warmup_kw": supplemental_warmup_kw,
-                "pump_power_kw": pump_power_kw,
-                "available_cooling_kw": available_cooling_kw,
-                "thermal_margin_kw": available_cooling_kw - load_result.total_kw,
-                "equivalent_cop": load_result.total_kw / pump_power_kw,
-                "power_saving_kw": baseline["compressor_power_kw"] - pump_power_kw,
+                "requires_supplemental_warmup": bool(sensitivity_row["requires_supplemental_warmup"]),
+                "lng_loop_pump_power_kw": lng_loop_pump_power_kw,
+                "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                "pump_power_kw": core_system_power_kw,
+                "core_system_power_kw": core_system_power_kw,
+                "base_duty_available_cooling_kw": base_duty_available_cooling_kw,
+                "hybrid_available_cooling_kw": hybrid_available_cooling_kw,
+                "available_cooling_kw": base_duty_available_cooling_kw,
+                "base_duty_margin_kw": float(sensitivity_row["base_duty_margin_kw"]),
+                "hybrid_margin_kw": float(sensitivity_row["thermal_margin_kw"]),
+                "equivalent_cop": load_result.total_kw / core_system_power_kw,
+                "power_saving_kw": baseline["compressor_power_kw"] - core_system_power_kw,
                 "return_to_lng_temp_k": float(sensitivity_row["return_to_lng_temp_k"]),
                 "hot_end_margin_k": float(sensitivity_row["hot_end_margin_k"]),
-                "meets_idc_load": bool(sensitivity_row["feasible"]),
+                "hydraulic_feasible": hydraulic_feasible,
+                "within_design_lng_duty": bool(sensitivity_row["within_design_lng_duty"]),
+                "base_duty_meets_idc_load": base_duty_meets_idc_load,
+                "hybrid_load_satisfied": hybrid_load_satisfied,
+                "meets_idc_load": base_duty_meets_idc_load,
                 "max_feasible_distance_m": float(pipeline_result["max_feasible_distance_m"]),
+                "max_base_duty_distance_m": float(pipeline_result["max_base_duty_distance_m"]),
             }
         )
     return add_annualized_columns(pd.DataFrame(rows), "pump_power_kw", baseline["compressor_power_kw"], config)
@@ -131,6 +163,7 @@ def _evaluate_feasible_alternative_task(task: dict[str, object]) -> dict[str, ob
     candidate = dict(task["candidate"])
     required_cooling_kw = float(task["required_cooling_kw"])
     baseline_power_kw = float(task["baseline_power_kw"])
+    idc_secondary_loop_pump_kw = float(task["idc_secondary_loop_pump_kw"])
     try:
         pipeline_result = design_pipeline(config, candidate, required_cooling_kw)
         hx_result = design_lng_vaporizer(
@@ -139,7 +172,8 @@ def _evaluate_feasible_alternative_task(task: dict[str, object]) -> dict[str, ob
             float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
         )
         selected_pipeline = pipeline_result["selected_design"]
-        pump_power_kw = float(selected_pipeline["pump_power_kw"])
+        lng_loop_pump_power_kw = float(selected_pipeline["pump_power_kw"])
+        core_system_power_kw = lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
         available_cooling_kw = (
             hx_result["required_lng_duty_kw"]
             - float(selected_pipeline["heat_gain_kw"])
@@ -159,10 +193,13 @@ def _evaluate_feasible_alternative_task(task: dict[str, object]) -> dict[str, ob
             "pipeline_insulation_thickness_m": float(selected_pipeline["insulation_thickness_m"]),
             "pipeline_heat_gain_kw": float(selected_pipeline["heat_gain_kw"]),
             "supplemental_warmup_kw": float(selected_pipeline["supplemental_warmup_kw"]),
-            "pump_power_kw": pump_power_kw,
+            "pump_power_kw": core_system_power_kw,
+            "lng_loop_pump_power_kw": lng_loop_pump_power_kw,
+            "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+            "core_system_power_kw": core_system_power_kw,
             "available_cooling_kw": available_cooling_kw,
-            "power_saving_kw": baseline_power_kw - pump_power_kw,
-            "equivalent_cop": required_cooling_kw / pump_power_kw,
+            "power_saving_kw": baseline_power_kw - core_system_power_kw,
+            "equivalent_cop": required_cooling_kw / core_system_power_kw,
             "design_feasible": available_cooling_kw >= required_cooling_kw - 1e-6,
             "failure_reason": "",
         }
@@ -182,6 +219,9 @@ def _evaluate_feasible_alternative_task(task: dict[str, object]) -> dict[str, ob
             "pipeline_heat_gain_kw": math.nan,
             "supplemental_warmup_kw": math.nan,
             "pump_power_kw": math.nan,
+            "lng_loop_pump_power_kw": math.nan,
+            "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+            "core_system_power_kw": math.nan,
             "available_cooling_kw": math.nan,
             "power_saving_kw": math.nan,
             "equivalent_cop": math.nan,
@@ -195,6 +235,7 @@ def _evaluate_supply_temperature_sweep_task(task: dict[str, object]) -> dict[str
     required_cooling_kw = float(task["required_cooling_kw"])
     baseline_power_kw = float(task["baseline_power_kw"])
     supply_temp_k = float(task["supply_temp_k"])
+    idc_secondary_loop_pump_kw = float(task["idc_secondary_loop_pump_kw"])
     trial_config = _with_supply_temperature(config, supply_temp_k)
     try:
         screening = compute_fluid_screening(
@@ -211,6 +252,8 @@ def _evaluate_supply_temperature_sweep_task(task: dict[str, object]) -> dict[str
         selected_design = pipeline_result["selected_design"]
         target_distance_m = float(trial_config["system_targets"]["long_distance_pipeline_m"])
         long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
+        lng_loop_pump_power_kw = float(selected_design["pump_power_kw"])
+        core_system_power_kw = lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
         available_cooling_kw = (
             hx_result["required_lng_duty_kw"]
             - float(selected_design["heat_gain_kw"])
@@ -221,16 +264,25 @@ def _evaluate_supply_temperature_sweep_task(task: dict[str, object]) -> dict[str
             "supply_temp_c": supply_temp_k - 273.15,
             "selected_fluid": screening["selected"]["fluid"],
             "screening_score": float(screening["selected"]["score"]),
-            "pump_power_kw": float(selected_design["pump_power_kw"]),
+            "pump_power_kw": core_system_power_kw,
+            "lng_loop_pump_power_kw": lng_loop_pump_power_kw,
+            "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+            "core_system_power_kw": core_system_power_kw,
             "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
             "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
+            "requires_supplemental_warmup": bool(selected_design["requires_supplemental_warmup"]),
             "hx_shell_diameter_m": float(hx_result["selected_geometry"]["shell_diameter_m"]),
             "hx_tube_count": int(hx_result["selected_geometry"]["tube_count"]),
             "available_cooling_kw": available_cooling_kw,
             "thermal_margin_kw": available_cooling_kw - required_cooling_kw,
-            "power_saving_kw": baseline_power_kw - float(selected_design["pump_power_kw"]),
+            "power_saving_kw": baseline_power_kw - core_system_power_kw,
             "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
-            "long_distance_meets_load": bool(long_distance_row["feasible"]),
+            "max_base_duty_distance_km": float(pipeline_result["max_base_duty_distance_m"]) / 1000.0,
+            "long_distance_hydraulic_feasible": bool(long_distance_row["hydraulic_feasible"]),
+            "long_distance_meets_load": bool(long_distance_row["base_duty_meets_idc_load"]),
+            "long_distance_base_duty_meets_load": bool(long_distance_row["base_duty_meets_idc_load"]),
+            "long_distance_hybrid_load_satisfied": bool(long_distance_row["hybrid_load_satisfied"]),
+            "long_distance_requires_supplemental_warmup": bool(long_distance_row["requires_supplemental_warmup"]),
             "status": "feasible",
             "failure_reason": "",
         }
@@ -241,15 +293,24 @@ def _evaluate_supply_temperature_sweep_task(task: dict[str, object]) -> dict[str
             "selected_fluid": "",
             "screening_score": math.nan,
             "pump_power_kw": math.nan,
+            "lng_loop_pump_power_kw": math.nan,
+            "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+            "core_system_power_kw": math.nan,
             "pipeline_heat_gain_kw": math.nan,
             "supplemental_warmup_kw": math.nan,
+            "requires_supplemental_warmup": False,
             "hx_shell_diameter_m": math.nan,
             "hx_tube_count": math.nan,
             "available_cooling_kw": math.nan,
             "thermal_margin_kw": math.nan,
             "power_saving_kw": math.nan,
             "max_feasible_distance_km": math.nan,
+            "max_base_duty_distance_km": math.nan,
+            "long_distance_hydraulic_feasible": False,
             "long_distance_meets_load": False,
+            "long_distance_base_duty_meets_load": False,
+            "long_distance_hybrid_load_satisfied": False,
+            "long_distance_requires_supplemental_warmup": False,
             "status": "failed",
             "failure_reason": str(exc),
         }
@@ -259,6 +320,7 @@ def _evaluate_ambient_closure_task(task: dict[str, object]) -> list[dict[str, ob
     config = dict(task["config"])
     required_cooling_kw = float(task["required_cooling_kw"])
     supply_temp_k = float(task["supply_temp_k"])
+    idc_secondary_loop_pump_kw = float(task["idc_secondary_loop_pump_kw"])
     target_distance_m = float(config["system_targets"]["long_distance_pipeline_m"])
     base_distance_m = float(config["assignment"]["pipeline_distance_m"])
     tolerance_kw = 1e-3
@@ -286,12 +348,16 @@ def _evaluate_ambient_closure_task(task: dict[str, object]) -> list[dict[str, ob
             long_distance_row = _target_distance_row(pipeline_result["sensitivity"], target_distance_m)
             closure_distance_m = float(pipeline_result.get("ambient_only_closure_distance_m", math.nan))
             closure_distance_km = closure_distance_m / 1000.0 if math.isfinite(closure_distance_m) else math.nan
+            lng_loop_pump_power_kw = float(selected_design["pump_power_kw"])
+            core_system_power_kw = lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
+            long_distance_lng_loop_pump_power_kw = float(long_distance_row["pump_power_kw"])
+            long_distance_core_system_power_kw = long_distance_lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
             warmup_free_at_base = (
-                bool(selected_design["feasible"])
+                bool(selected_design["hydraulic_feasible"])
                 and float(selected_design["supplemental_warmup_kw"]) <= tolerance_kw
             )
             warmup_free_at_long = (
-                bool(long_distance_row["feasible"])
+                bool(long_distance_row["hydraulic_feasible"])
                 and float(long_distance_row["supplemental_warmup_kw"]) <= tolerance_kw
             )
             rows.append(
@@ -302,19 +368,28 @@ def _evaluate_ambient_closure_task(task: dict[str, object]) -> list[dict[str, ob
                     "coolprop_name": candidate["coolprop_name"],
                     "selected_by_screening": is_screening_selected,
                     "screening_score": float(candidate["score"]),
-                    "pump_power_kw": float(selected_design["pump_power_kw"]),
+                    "pump_power_kw": core_system_power_kw,
+                    "lng_loop_pump_power_kw": lng_loop_pump_power_kw,
+                    "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                    "core_system_power_kw": core_system_power_kw,
                     "pipeline_heat_gain_kw": float(selected_design["heat_gain_kw"]),
                     "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
+                    "requires_supplemental_warmup": bool(selected_design["requires_supplemental_warmup"]),
                     "actual_lng_duty_kw": float(selected_design["actual_lng_duty_kw"]),
                     "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
+                    "max_base_duty_distance_km": float(pipeline_result["max_base_duty_distance_m"]) / 1000.0,
                     "ambient_only_closure_distance_km": closure_distance_km,
                     "warmup_free_at_base_distance": warmup_free_at_base,
                     "warmup_free_at_long_distance": warmup_free_at_long,
                     "base_distance_km": base_distance_m / 1000.0,
                     "long_distance_km": target_distance_m / 1000.0,
                     "long_distance_supplemental_warmup_kw": float(long_distance_row["supplemental_warmup_kw"]),
-                    "long_distance_pump_power_kw": float(long_distance_row["pump_power_kw"]),
-                    "long_distance_feasible": bool(long_distance_row["feasible"]),
+                    "long_distance_pump_power_kw": long_distance_core_system_power_kw,
+                    "long_distance_lng_loop_pump_power_kw": long_distance_lng_loop_pump_power_kw,
+                    "long_distance_core_system_power_kw": long_distance_core_system_power_kw,
+                    "long_distance_hydraulic_feasible": bool(long_distance_row["hydraulic_feasible"]),
+                    "long_distance_base_duty_meets_idc_load": bool(long_distance_row["base_duty_meets_idc_load"]),
+                    "long_distance_hybrid_load_satisfied": bool(long_distance_row["hybrid_load_satisfied"]),
                     "hx_min_pinch_k": float(hx_result["min_pinch_k"]),
                     "status": "feasible",
                     "failure_reason": "",
@@ -330,10 +405,15 @@ def _evaluate_ambient_closure_task(task: dict[str, object]) -> list[dict[str, ob
                     "selected_by_screening": is_screening_selected,
                     "screening_score": float(candidate["score"]),
                     "pump_power_kw": math.nan,
+                    "lng_loop_pump_power_kw": math.nan,
+                    "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                    "core_system_power_kw": math.nan,
                     "pipeline_heat_gain_kw": math.nan,
                     "supplemental_warmup_kw": math.nan,
+                    "requires_supplemental_warmup": False,
                     "actual_lng_duty_kw": math.nan,
                     "max_feasible_distance_km": math.nan,
+                    "max_base_duty_distance_km": math.nan,
                     "ambient_only_closure_distance_km": math.nan,
                     "warmup_free_at_base_distance": False,
                     "warmup_free_at_long_distance": False,
@@ -341,7 +421,11 @@ def _evaluate_ambient_closure_task(task: dict[str, object]) -> list[dict[str, ob
                     "long_distance_km": target_distance_m / 1000.0,
                     "long_distance_supplemental_warmup_kw": math.nan,
                     "long_distance_pump_power_kw": math.nan,
-                    "long_distance_feasible": False,
+                    "long_distance_lng_loop_pump_power_kw": math.nan,
+                    "long_distance_core_system_power_kw": math.nan,
+                    "long_distance_hydraulic_feasible": False,
+                    "long_distance_base_duty_meets_idc_load": False,
+                    "long_distance_hybrid_load_satisfied": False,
                     "hx_min_pinch_k": math.nan,
                     "status": "failed",
                     "failure_reason": str(exc),
@@ -355,6 +439,7 @@ def _evaluate_zero_warmup_target_task(task: dict[str, object]) -> list[dict[str,
     required_cooling_kw = float(task["required_cooling_kw"])
     target_distance_m = float(task["target_distance_m"])
     supply_temp_k = float(task["supply_temp_k"])
+    idc_secondary_loop_pump_kw = float(task["idc_secondary_loop_pump_kw"])
     trial_config = _with_supply_temperature(config, supply_temp_k)
     screening = compute_fluid_screening(
         trial_config,
@@ -383,6 +468,8 @@ def _evaluate_zero_warmup_target_task(task: dict[str, object]) -> list[dict[str,
                 feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
             ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
             best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
+            best_design_lng_loop_pump_power_kw = float(best_design["pump_power_kw"])
+            best_design_core_system_power_kw = best_design_lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
 
             rows.append(
                 {
@@ -396,7 +483,10 @@ def _evaluate_zero_warmup_target_task(task: dict[str, object]) -> list[dict[str,
                     "screening_score": float(candidate["score"]),
                     "zero_warmup_design_found": not zero_warmup_designs.empty,
                     "minimum_supplemental_warmup_kw": float(min_supplemental_design["supplemental_warmup_kw"]),
-                    "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
+                    "best_design_pump_power_kw": best_design_core_system_power_kw,
+                    "best_design_lng_loop_pump_power_kw": best_design_lng_loop_pump_power_kw,
+                    "best_design_idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                    "best_design_core_system_power_kw": best_design_core_system_power_kw,
                     "best_design_heat_gain_kw": float(best_design["heat_gain_kw"]),
                     "best_design_supplemental_warmup_kw": float(best_design["supplemental_warmup_kw"]),
                     "best_design_actual_lng_duty_kw": float(best_design["actual_lng_duty_kw"]),
@@ -422,6 +512,9 @@ def _evaluate_zero_warmup_target_task(task: dict[str, object]) -> list[dict[str,
                     "zero_warmup_design_found": False,
                     "minimum_supplemental_warmup_kw": math.nan,
                     "best_design_pump_power_kw": math.nan,
+                    "best_design_lng_loop_pump_power_kw": math.nan,
+                    "best_design_idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                    "best_design_core_system_power_kw": math.nan,
                     "best_design_heat_gain_kw": math.nan,
                     "best_design_supplemental_warmup_kw": math.nan,
                     "best_design_actual_lng_duty_kw": math.nan,
@@ -449,6 +542,7 @@ def _evaluate_passive_zero_warmup_task(task: dict[str, object]) -> list[dict[str
     scenario_config = _with_environment_overrides(config, thermal_case)
     load_result = compute_load_model(scenario_config)
     baseline = compute_baseline_cycle(scenario_config, load_result.total_kw)
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(scenario_config, load_result.total_kw)
 
     trial_config = _with_supply_temperature(scenario_config, supply_temp_k)
     trial_config = _with_pipeline_distance(trial_config, target_distance_m)
@@ -483,6 +577,8 @@ def _evaluate_passive_zero_warmup_task(task: dict[str, object]) -> list[dict[str
                 feasible_scan["supplemental_warmup_kw"] <= tolerance_kw
             ].sort_values(["pump_power_kw", "heat_gain_kw"], ascending=[True, True])
             best_design = zero_warmup_designs.iloc[0] if not zero_warmup_designs.empty else min_supplemental_design
+            best_design_lng_loop_pump_power_kw = float(best_design["pump_power_kw"])
+            best_design_core_system_power_kw = best_design_lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
 
             rows.append(
                 {
@@ -512,11 +608,14 @@ def _evaluate_passive_zero_warmup_task(task: dict[str, object]) -> list[dict[str
                     "best_design_line_heat_gain_kw": float(best_design["line_heat_gain_kw"]),
                     "best_design_pump_heat_to_fluid_kw": float(best_design["pump_heat_to_fluid_kw"]),
                     "best_design_total_heat_gain_kw": float(best_design["heat_gain_kw"]),
-                    "best_design_pump_power_kw": float(best_design["pump_power_kw"]),
+                    "best_design_pump_power_kw": best_design_core_system_power_kw,
+                    "best_design_lng_loop_pump_power_kw": best_design_lng_loop_pump_power_kw,
+                    "best_design_idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                    "best_design_core_system_power_kw": best_design_core_system_power_kw,
                     "best_design_supply_id_m": float(best_design["supply_id_m"]),
                     "best_design_return_id_m": float(best_design["return_id_m"]),
                     "best_design_insulation_thickness_m": float(best_design["insulation_thickness_m"]),
-                    "best_design_power_saving_kw": float(baseline["compressor_power_kw"]) - float(best_design["pump_power_kw"]),
+                    "best_design_power_saving_kw": float(baseline["compressor_power_kw"]) - best_design_core_system_power_kw,
                     "status": "feasible",
                     "failure_reason": "",
                 }
@@ -551,6 +650,9 @@ def _evaluate_passive_zero_warmup_task(task: dict[str, object]) -> list[dict[str
                     "best_design_pump_heat_to_fluid_kw": math.nan,
                     "best_design_total_heat_gain_kw": math.nan,
                     "best_design_pump_power_kw": math.nan,
+                    "best_design_lng_loop_pump_power_kw": math.nan,
+                    "best_design_idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+                    "best_design_core_system_power_kw": math.nan,
                     "best_design_supply_id_m": math.nan,
                     "best_design_return_id_m": math.nan,
                     "best_design_insulation_thickness_m": math.nan,
@@ -600,6 +702,7 @@ def evaluate_supply_temperature_sweep(
     parallel_options: ParallelOptions | None = None,
 ) -> pd.DataFrame:
     options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(config, load_result.total_kw)
     rows = map_items(
         _evaluate_supply_temperature_sweep_task,
         [
@@ -608,6 +711,7 @@ def evaluate_supply_temperature_sweep(
                 "required_cooling_kw": load_result.total_kw,
                 "baseline_power_kw": baseline["compressor_power_kw"],
                 "supply_temp_k": float(supply_temp_k),
+                "idc_secondary_loop_pump_kw": idc_secondary_loop_pump_kw,
             }
             for supply_temp_k in config.get(
                 "sensitivity",
@@ -628,6 +732,7 @@ def evaluate_ambient_closure_map(
     target_distance_m = float(config["system_targets"]["long_distance_pipeline_m"])
     base_distance_m = float(config["assignment"]["pipeline_distance_m"])
     options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(config, load_result.total_kw)
     task_rows = map_items(
         _evaluate_ambient_closure_task,
         [
@@ -635,6 +740,7 @@ def evaluate_ambient_closure_map(
                 "config": config,
                 "required_cooling_kw": load_result.total_kw,
                 "supply_temp_k": float(supply_temp_k),
+                "idc_secondary_loop_pump_kw": idc_secondary_loop_pump_kw,
             }
             for supply_temp_k in config.get(
                 "sensitivity",
@@ -683,6 +789,7 @@ def evaluate_zero_warmup_target_search(
         }
     )
     options = parallel_options or SERIAL_PARALLEL_OPTIONS
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(config, load_result.total_kw)
     task_rows = map_items(
         _evaluate_zero_warmup_target_task,
         [
@@ -691,6 +798,7 @@ def evaluate_zero_warmup_target_search(
                 "required_cooling_kw": load_result.total_kw,
                 "target_distance_m": float(target_distance_m),
                 "supply_temp_k": float(supply_temp_k),
+                "idc_secondary_loop_pump_kw": idc_secondary_loop_pump_kw,
             }
             for target_distance_m in target_distances_m
             for supply_temp_k in config.get(

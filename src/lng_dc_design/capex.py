@@ -190,8 +190,11 @@ def estimate_capex(config: dict, idc_hx_result: dict, hx_result: dict, pipeline_
         * float(capex_cfg["pump_installation_multiplier"])
         * krw_per_1998_usd
     )
+    idc_parallel_circuits = max(int(idc_secondary_loop_result["parallel_circuits"]), 1)
+    idc_per_circuit_flow_m3_s = float(idc_secondary_loop_result["per_circuit_volumetric_flow_m3_s"])
     idc_pump_cost_krw = (
-        centrifugal_pump_installed_cost_1998_usd(float(idc_secondary_loop_result["volumetric_flow_m3_s"]))
+        centrifugal_pump_installed_cost_1998_usd(idc_per_circuit_flow_m3_s)
+        * idc_parallel_circuits
         * float(capex_cfg["pump_installation_multiplier"])
         * krw_per_1998_usd
     )
@@ -229,7 +232,10 @@ def estimate_capex(config: dict, idc_hx_result: dict, hx_result: dict, pipeline_
         },
         {
             "component": "IDC secondary-loop pump",
-            "basis": f"{float(idc_secondary_loop_result['volumetric_flow_m3_s']) * GPM_PER_M3_S:,.0f} gpm",
+            "basis": (
+                f"{idc_parallel_circuits} x "
+                f"{idc_per_circuit_flow_m3_s * GPM_PER_M3_S:,.0f} gpm per circuit"
+            ),
             "installed_cost_krw": idc_pump_cost_krw,
             "source_ids": "SRC-021,SRC-022,SRC-023,SRC-024",
         },

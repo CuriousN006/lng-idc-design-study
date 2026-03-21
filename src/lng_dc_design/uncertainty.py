@@ -7,12 +7,24 @@ import pandas as pd
 
 from .baseline_vcc import compute_baseline_cycle
 from .fluid_screening import compute_fluid_screening
+from .idc_secondary_loop import evaluate_idc_secondary_loop
 from .load_model import compute_load_model
 from .parallel import ParallelOptions, map_items
 from .pipeline_loop import design_pipeline
 
 
 SERIAL_PARALLEL_OPTIONS = ParallelOptions(enabled=False, workers=1)
+
+
+def _idc_secondary_loop_pump_power_kw(config: dict, required_cooling_kw: float) -> float:
+    assignment = config["assignment"]
+    idc_hx = config["idc_hx"]
+    chilled_delta_t_k = float(assignment["chilled_water_return_temp_k"]) - float(assignment["chilled_water_supply_temp_k"])
+    chilled_water_mass_flow_kg_s = required_cooling_kw * 1000.0 / (
+        float(idc_hx["chilled_water_cp_j_per_kgk"]) * chilled_delta_t_k
+    )
+    idc_secondary_loop_result = evaluate_idc_secondary_loop(config, chilled_water_mass_flow_kg_s)
+    return float(idc_secondary_loop_result["selected_design"]["pump_power_kw"])
 
 
 def _with_uncertainty_sample(config: dict, sample: dict[str, float]) -> dict:
@@ -42,6 +54,9 @@ def _evaluate_uncertainty_sample(task: dict[str, object]) -> dict[str, object]:
     )
     pipeline_result = design_pipeline(trial_config, screening["selected"], load_result.total_kw)
     selected_design = pipeline_result["selected_design"]
+    lng_loop_pump_power_kw = float(selected_design["pump_power_kw"])
+    idc_secondary_loop_pump_kw = _idc_secondary_loop_pump_power_kw(trial_config, load_result.total_kw)
+    core_system_power_kw = lng_loop_pump_power_kw + idc_secondary_loop_pump_kw
     return {
         "sample_id": int(sample["sample_id"]),
         "ambient_air_temp_k": float(sample["ambient_air_temp_k"]),
@@ -52,7 +67,10 @@ def _evaluate_uncertainty_sample(task: dict[str, object]) -> dict[str, object]:
         "selected_fluid": str(screening["selected"]["fluid"]),
         "screening_score": float(screening["selected"]["score"]),
         "baseline_power_kw": float(baseline["compressor_power_kw"]),
-        "pump_power_kw": float(selected_design["pump_power_kw"]),
+        "pump_power_kw": core_system_power_kw,
+        "lng_loop_pump_power_kw": lng_loop_pump_power_kw,
+        "idc_secondary_loop_pump_power_kw": idc_secondary_loop_pump_kw,
+        "core_system_power_kw": core_system_power_kw,
         "supplemental_warmup_kw": float(selected_design["supplemental_warmup_kw"]),
         "heat_gain_kw": float(selected_design["heat_gain_kw"]),
         "max_feasible_distance_km": float(pipeline_result["max_feasible_distance_m"]) / 1000.0,
@@ -91,7 +109,15 @@ def evaluate_uncertainty_study(
     frame = pd.DataFrame(rows).sort_values("sample_id").reset_index(drop=True)
 
     summary_rows = []
-    for column in ["baseline_power_kw", "pump_power_kw", "supplemental_warmup_kw", "heat_gain_kw", "max_feasible_distance_km"]:
+    for column in [
+        "baseline_power_kw",
+        "lng_loop_pump_power_kw",
+        "idc_secondary_loop_pump_power_kw",
+        "core_system_power_kw",
+        "supplemental_warmup_kw",
+        "heat_gain_kw",
+        "max_feasible_distance_km",
+    ]:
         summary_rows.extend(
             [
                 {"metric": f"{column}: mean", "value": float(frame[column].mean())},
