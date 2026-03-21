@@ -32,6 +32,8 @@ python -m lng_dc_design compare-legacy --config config/base.toml
 python -m lng_dc_design validate --config config/base.toml
 ```
 
+병렬 실행이 필요하면 `--workers N`을 붙일 수 있습니다. 현재 기준으로는 `explore-passive-heat`처럼 큰 탐색에서 병렬화 이득이 크고, `run-all`이나 `validate`는 물성 캐시 이후 직렬이 더 빠를 수 있습니다.
+
 ## Output
 
 - `output/summary.csv`

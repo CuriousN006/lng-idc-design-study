@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import CoolProp.CoolProp as CP
 import pandas as pd
 
-from .thermo import fluid_phase, log_mean_temperature_difference
+from .thermo import fluid_phase, log_mean_temperature_difference, props_si
 
 
 def evaluate_idc_heat_exchange(
@@ -29,11 +28,11 @@ def evaluate_idc_heat_exchange(
     if minimum_return_to_lng_k <= coolant_after_idc_temp_k:
         raise RuntimeError("Required LNG hot-end return temperature must exceed the IDC outlet temperature.")
 
-    h_supply = float(CP.PropsSI("H", "T", supply_temp_k, "P", pressure_pa, fluid))
-    h_after_idc = float(CP.PropsSI("H", "T", coolant_after_idc_temp_k, "P", pressure_pa, fluid))
+    h_supply = props_si("H", "T", supply_temp_k, "P", pressure_pa, fluid)
+    h_after_idc = props_si("H", "T", coolant_after_idc_temp_k, "P", pressure_pa, fluid)
     coolant_mass_flow_kg_s = required_cooling_kw * 1000.0 / max(h_after_idc - h_supply, 1.0)
 
-    h_minimum_return = float(CP.PropsSI("H", "T", minimum_return_to_lng_k, "P", pressure_pa, fluid))
+    h_minimum_return = props_si("H", "T", minimum_return_to_lng_k, "P", pressure_pa, fluid)
     minimum_lng_duty_kw = coolant_mass_flow_kg_s * (h_minimum_return - h_supply) / 1000.0
     minimum_line_heat_gain_required_kw = max(minimum_lng_duty_kw - required_cooling_kw, 0.0)
     design_lng_duty_kw = required_cooling_kw / utilization_target_fraction
@@ -54,10 +53,10 @@ def evaluate_idc_heat_exchange(
     after_idc_phase = fluid_phase(coolant_after_idc_temp_k, pressure_pa, fluid)
     minimum_return_phase = fluid_phase(minimum_return_to_lng_k, pressure_pa, fluid)
     reference_t = 0.5 * (supply_temp_k + coolant_after_idc_temp_k)
-    reference_density = float(CP.PropsSI("D", "T", reference_t, "P", pressure_pa, fluid))
-    reference_cp = float(CP.PropsSI("C", "T", reference_t, "P", pressure_pa, fluid))
-    reference_viscosity = float(CP.PropsSI("V", "T", reference_t, "P", pressure_pa, fluid))
-    reference_conductivity = float(CP.PropsSI("L", "T", reference_t, "P", pressure_pa, fluid))
+    reference_density = props_si("D", "T", reference_t, "P", pressure_pa, fluid)
+    reference_cp = props_si("C", "T", reference_t, "P", pressure_pa, fluid)
+    reference_viscosity = props_si("V", "T", reference_t, "P", pressure_pa, fluid)
+    reference_conductivity = props_si("L", "T", reference_t, "P", pressure_pa, fluid)
 
     profile = pd.DataFrame(
         [

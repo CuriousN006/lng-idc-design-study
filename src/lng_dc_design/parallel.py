@@ -13,14 +13,7 @@ R = TypeVar("R")
 
 
 HEAVY_COMMANDS = {
-    "run-all",
-    "validate",
-    "analyze-aux-heat",
-    "scenario-study",
     "explore-passive-heat",
-    "build-report",
-    "build-slides",
-    "build-deliverables",
 }
 
 

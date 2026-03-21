@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import math
 
-import CoolProp.CoolProp as CP
 import pandas as pd
 
-from .thermo import bundle_shell_diameter_m, log_mean_temperature_difference
+from .thermo import bundle_shell_diameter_m, log_mean_temperature_difference, props_si
 
 
 def _tube_pressure_drop(length_m: float, diameter_i_m: float, velocity: float, rho: float, mu: float) -> float:
@@ -27,7 +26,7 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
     lng_pressure_pa = assignment["lng_pressure_mpa"] * 1_000_000.0
     cold_bounds = hx_cfg["segment_boundaries_k"]
 
-    h_lng = [float(CP.PropsSI("H", "T", temp_k, "P", lng_pressure_pa, "Methane")) for temp_k in cold_bounds]
+    h_lng = [props_si("H", "T", temp_k, "P", lng_pressure_pa, "Methane") for temp_k in cold_bounds]
     q_total_w = required_lng_duty_kw * 1000.0
     m_lng = q_total_w / (h_lng[-1] - h_lng[0])
     q_segments = [m_lng * (h_lng[i + 1] - h_lng[i]) for i in range(len(cold_bounds) - 1)]
@@ -35,8 +34,8 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
     return_to_lng_temp_k = float(selected_fluid.get("return_to_lng_temp_k", loop["return_to_lng_temp_k"]))
     after_idc_temp_k = float(selected_fluid.get("after_idc_temp_k", loop["after_idc_temp_k"]))
 
-    h_hot_in = float(CP.PropsSI("H", "T", return_to_lng_temp_k, "P", pressure_pa, fluid))
-    h_hot_out = float(CP.PropsSI("H", "T", loop["supply_temp_k"], "P", pressure_pa, fluid))
+    h_hot_in = props_si("H", "T", return_to_lng_temp_k, "P", pressure_pa, fluid)
+    h_hot_out = props_si("H", "T", loop["supply_temp_k"], "P", pressure_pa, fluid)
     m_hot = float(selected_fluid.get("required_mass_flow_kg_s", q_total_w / max(h_hot_in - h_hot_out, 1.0)))
 
     hot_at_boundaries = [0.0] * len(cold_bounds)
@@ -44,7 +43,7 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
     current_h = h_hot_in
     for segment_idx in range(len(q_segments) - 1, -1, -1):
         current_h -= q_segments[segment_idx] / m_hot
-        hot_at_boundaries[segment_idx] = float(CP.PropsSI("T", "H", current_h, "P", pressure_pa, fluid))
+        hot_at_boundaries[segment_idx] = props_si("T", "H", current_h, "P", pressure_pa, fluid)
 
     pinch_values = [hot - cold for hot, cold in zip(hot_at_boundaries, cold_bounds)]
     min_pinch = min(pinch_values)
@@ -79,15 +78,15 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
                 lng_mean_t = 0.5 * (cold_in + cold_out)
                 hot_mean_t = 0.5 * (hot_in + hot_out)
 
-                mu_tube = float(CP.PropsSI("V", "T", lng_mean_t, "P", lng_pressure_pa, "Methane"))
-                k_tube = float(CP.PropsSI("L", "T", lng_mean_t, "P", lng_pressure_pa, "Methane"))
-                cp_tube = float(CP.PropsSI("C", "T", lng_mean_t, "P", lng_pressure_pa, "Methane"))
-                rho_tube = float(CP.PropsSI("D", "T", lng_mean_t, "P", lng_pressure_pa, "Methane"))
+                mu_tube = props_si("V", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
+                k_tube = props_si("L", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
+                cp_tube = props_si("C", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
+                rho_tube = props_si("D", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
 
-                mu_shell = float(CP.PropsSI("V", "T", hot_mean_t, "P", pressure_pa, fluid))
-                k_shell = float(CP.PropsSI("L", "T", hot_mean_t, "P", pressure_pa, fluid))
-                cp_shell = float(CP.PropsSI("C", "T", hot_mean_t, "P", pressure_pa, fluid))
-                rho_shell = float(CP.PropsSI("D", "T", hot_mean_t, "P", pressure_pa, fluid))
+                mu_shell = props_si("V", "T", hot_mean_t, "P", pressure_pa, fluid)
+                k_shell = props_si("L", "T", hot_mean_t, "P", pressure_pa, fluid)
+                cp_shell = props_si("C", "T", hot_mean_t, "P", pressure_pa, fluid)
+                rho_shell = props_si("D", "T", hot_mean_t, "P", pressure_pa, fluid)
 
                 tube_area = tube_count * math.pi * inner_diameter_m ** 2 / 4.0
                 tube_velocity = m_lng / (rho_tube * tube_area)

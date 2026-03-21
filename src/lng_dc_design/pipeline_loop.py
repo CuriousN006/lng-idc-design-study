@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 
-import CoolProp.CoolProp as CP
 import pandas as pd
 
 from .thermo import (
@@ -10,6 +9,8 @@ from .thermo import (
     buried_pipe_heat_gain_w_per_length,
     exposed_pipe_heat_gain_w_per_length,
     outside_h_from_wind_speed,
+    phase_si,
+    props_si,
 )
 
 
@@ -59,8 +60,8 @@ def _evaluate_pipeline_case(
     thermal = _resolve_thermal_case(config, thermal_case)
 
     supply_temp_k = loop["supply_temp_k"]
-    h_supply = float(CP.PropsSI("H", "T", supply_temp_k, "P", pressure_pa, fluid))
-    h_after_idc = float(CP.PropsSI("H", "T", after_idc_temp_k, "P", pressure_pa, fluid))
+    h_supply = props_si("H", "T", supply_temp_k, "P", pressure_pa, fluid)
+    h_after_idc = props_si("H", "T", after_idc_temp_k, "P", pressure_pa, fluid)
 
     supply_avg_temp_k = 0.5 * (supply_temp_k + after_idc_temp_k)
     return_to_lng_temp_k = max(after_idc_temp_k + 1e-3, minimum_return_to_lng_k)
@@ -81,10 +82,10 @@ def _evaluate_pipeline_case(
     for _ in range(40):
         return_avg_temp_k = 0.5 * (after_idc_temp_k + return_to_lng_temp_k)
 
-        supply_rho = float(CP.PropsSI("D", "T", supply_avg_temp_k, "P", pressure_pa, fluid))
-        return_rho = float(CP.PropsSI("D", "T", return_avg_temp_k, "P", pressure_pa, fluid))
-        supply_mu = float(CP.PropsSI("V", "T", supply_avg_temp_k, "P", pressure_pa, fluid))
-        return_mu = float(CP.PropsSI("V", "T", return_avg_temp_k, "P", pressure_pa, fluid))
+        supply_rho = props_si("D", "T", supply_avg_temp_k, "P", pressure_pa, fluid)
+        return_rho = props_si("D", "T", return_avg_temp_k, "P", pressure_pa, fluid)
+        supply_mu = props_si("V", "T", supply_avg_temp_k, "P", pressure_pa, fluid)
+        return_mu = props_si("V", "T", return_avg_temp_k, "P", pressure_pa, fluid)
 
         q_supply = mass_flow_kg_s / supply_rho
         q_return = mass_flow_kg_s / return_rho
@@ -157,8 +158,13 @@ def _evaluate_pipeline_case(
         supplemental_reheat_kw = max(minimum_line_heat_gain_required_kw - heat_gain_kw, 0.0)
         total_external_heat_kw = heat_gain_kw + supplemental_reheat_kw
         actual_lng_duty_kw = required_cooling_kw + total_external_heat_kw
-        new_return_to_lng_temp_k = float(
-            CP.PropsSI("T", "H", h_after_idc + total_external_heat_kw * 1000.0 / mass_flow_kg_s, "P", pressure_pa, fluid)
+        new_return_to_lng_temp_k = props_si(
+            "T",
+            "H",
+            h_after_idc + total_external_heat_kw * 1000.0 / mass_flow_kg_s,
+            "P",
+            pressure_pa,
+            fluid,
         )
         if abs(new_return_to_lng_temp_k - return_to_lng_temp_k) < 1e-4:
             return_to_lng_temp_k = new_return_to_lng_temp_k
@@ -172,7 +178,7 @@ def _evaluate_pipeline_case(
     hot_end_margin_k = return_to_lng_temp_k - minimum_return_to_lng_k
     thermal_margin_kw = available_cooling_kw - required_cooling_kw
     actual_utilization_fraction = required_cooling_kw / max(actual_lng_duty_kw, 1e-9)
-    return_phase = str(CP.PhaseSI("T", return_to_lng_temp_k, "P", pressure_pa, fluid))
+    return_phase = phase_si("T", return_to_lng_temp_k, "P", pressure_pa, fluid)
     feasible = (
         velocity_supply <= pipe_cfg["max_liquid_velocity_m_per_s"]
         and velocity_return <= pipe_cfg["max_liquid_velocity_m_per_s"]

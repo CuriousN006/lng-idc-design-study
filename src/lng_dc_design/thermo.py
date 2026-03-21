@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 import math
 from pathlib import Path
 
@@ -48,6 +49,54 @@ def log_mean_temperature_difference(delta_t1: float, delta_t2: float) -> float:
     return (delta_t1 - delta_t2) / math.log(delta_t1 / delta_t2)
 
 
+def _quantize(value: float) -> float:
+    return round(float(value), 8)
+
+
+@lru_cache(maxsize=65_536)
+def _cached_props(
+    output: str,
+    input_key_1: str,
+    input_value_1: float,
+    input_key_2: str,
+    input_value_2: float,
+    fluid: str,
+) -> float:
+    return float(CP.PropsSI(output, input_key_1, input_value_1, input_key_2, input_value_2, fluid))
+
+
+@lru_cache(maxsize=65_536)
+def _cached_phase(
+    input_key_1: str,
+    input_value_1: float,
+    input_key_2: str,
+    input_value_2: float,
+    fluid: str,
+) -> str:
+    return str(CP.PhaseSI(input_key_1, input_value_1, input_key_2, input_value_2, fluid)).lower()
+
+
+def props_si(output: str, input_key_1: str, input_value_1: float, input_key_2: str, input_value_2: float, fluid: str) -> float:
+    return _cached_props(
+        output,
+        input_key_1,
+        _quantize(input_value_1),
+        input_key_2,
+        _quantize(input_value_2),
+        fluid,
+    )
+
+
+def phase_si(input_key_1: str, input_value_1: float, input_key_2: str, input_value_2: float, fluid: str) -> str:
+    return _cached_phase(
+        input_key_1,
+        _quantize(input_value_1),
+        input_key_2,
+        _quantize(input_value_2),
+        fluid,
+    )
+
+
 def safe_props(
     output: str,
     *,
@@ -58,16 +107,16 @@ def safe_props(
     fluid: str,
 ) -> float:
     if temperature_k is not None and pressure_pa is not None:
-        return float(CP.PropsSI(output, "T", temperature_k, "P", pressure_pa, fluid))
+        return props_si(output, "T", temperature_k, "P", pressure_pa, fluid)
     if enthalpy_j_per_kg is not None and pressure_pa is not None:
-        return float(CP.PropsSI(output, "H", enthalpy_j_per_kg, "P", pressure_pa, fluid))
+        return props_si(output, "H", enthalpy_j_per_kg, "P", pressure_pa, fluid)
     if entropy_j_per_kgk is not None and pressure_pa is not None:
-        return float(CP.PropsSI(output, "S", entropy_j_per_kgk, "P", pressure_pa, fluid))
+        return props_si(output, "S", entropy_j_per_kgk, "P", pressure_pa, fluid)
     raise ValueError("Unsupported state specification.")
 
 
 def fluid_phase(temperature_k: float, pressure_pa: float, fluid: str) -> str:
-    return str(CP.PhaseSI("T", temperature_k, "P", pressure_pa, fluid)).lower()
+    return phase_si("T", temperature_k, "P", pressure_pa, fluid)
 
 
 def darcy_friction_factor(reynolds: float, roughness_m: float, diameter_m: float) -> float:
