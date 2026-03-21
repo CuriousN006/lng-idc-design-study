@@ -26,6 +26,7 @@ from .scenario_study import (
 from .system_eval import evaluate_system
 from .thermo import ensure_directory
 from .thermo_limit import compute_theoretical_minimum_power
+from .uncertainty import evaluate_uncertainty_study
 from .validation import validate_run
 
 
@@ -105,7 +106,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="LNG cold-energy IDC design toolkit")
-    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "analyze-aux-heat", "scenario-study", "explore-passive-heat", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
+    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "analyze-aux-heat", "scenario-study", "explore-passive-heat", "uncertainty-study", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
     parser.add_argument("--config", required=True, help="Path to TOML configuration file")
     parser.add_argument("--workers", type=int, default=None, help="Override process worker count for parallel commands")
     parser.add_argument("--serial", action="store_true", help="Force serial execution even for commands that default to parallel mode")
@@ -217,6 +218,19 @@ def main() -> int:
                 else:
                     print("  practical filter: no warm-up-free design survived")
             print()
+        return 0
+
+    if args.command == "uncertainty-study":
+        uncertainty_result = evaluate_uncertainty_study(values, parallel_options=parallel_options)
+        output_dir = ensure_directory(config_path.resolve().parent.parent / "output")
+        samples_path = output_dir / "uncertainty_samples.csv"
+        summary_path = output_dir / "uncertainty_summary.csv"
+        uncertainty_result["samples"].to_csv(samples_path, index=False)
+        uncertainty_result["summary"].to_csv(summary_path, index=False)
+        print(samples_path)
+        print(summary_path)
+        print()
+        print(uncertainty_result["summary"].to_string(index=False))
         return 0
 
     if args.command == "build-report":

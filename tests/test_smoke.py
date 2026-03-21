@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import unittest
 from pathlib import Path
 
@@ -24,6 +25,7 @@ from lng_dc_design.scenario_study import (
 )
 from lng_dc_design.system_eval import evaluate_system
 from lng_dc_design.thermo_limit import compute_theoretical_minimum_power
+from lng_dc_design.uncertainty import evaluate_uncertainty_study
 
 
 class SmokeTest(unittest.TestCase):
@@ -210,6 +212,13 @@ class SmokeTest(unittest.TestCase):
             float(aux_table.loc["ambient_air_trim_heater", "net_power_saving_kw"]),
             float(aux_table.loc["electric_resistance_heater", "net_power_saving_kw"]),
         )
+
+    def test_uncertainty_study_smoke(self) -> None:
+        trial_config = deepcopy(self.config)
+        trial_config["uncertainty_analysis"]["sample_count"] = 8
+        result = evaluate_uncertainty_study(trial_config)
+        self.assertEqual(len(result["samples"]), 8)
+        self.assertIn("selected_fluid: most_common", set(result["summary"]["metric"].tolist()))
 
 
 if __name__ == "__main__":

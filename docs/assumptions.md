@@ -52,3 +52,9 @@
 | ASM-046 | Heat-pump booster model | 0.25 kWe/kWth, fixed 20 kW | 보조 열원을 적극적으로 끌어올리는 소형 heat pump booster의 유효 전력비를 COP 4 수준으로 근사한 시나리오 |
 | ASM-047 | Minimum practical insulation thickness in passive warm-up studies | 0.05 m | 무보조 성립 여부를 보더라도 산업 배관에 최소한의 단열은 남아 있어야 한다는 현실성 필터 |
 | ASM-048 | Maximum practical passive-heat fraction of IDC load | 25% of modeled cooling load | 환경에서 과도하게 열을 주워오는 해를 배제하고, 수동 가열이 부하의 일부만 담당하는 범위를 실무형 필터로 두기 위한 기준 |
+| ASM-049 | Uncertainty study sample plan | 48 pseudo-random samples, seed 42 | 회귀 가능한 불확실도 탐색을 위해 샘플 수와 난수 시드를 고정 |
+| ASM-050 | Ambient-air temperature range in uncertainty study | 305.15-311.15 K | 여름 운전 외기 조건을 중심으로 ±3 K 범위를 주어 장거리 배관과 기준선 민감도를 확인 |
+| ASM-051 | IDC-side HX overall-U multiplier range | 0.85-1.15 | 1차 U 추정치의 불확실성을 단순 승수 범위로 반영 |
+| ASM-052 | Insulation conductivity multiplier range | 0.85-1.15 | 단열재 성능 편차와 시공 오차를 간략 반영 |
+| ASM-053 | Outside convection multiplier range | 0.70-1.30 | 외부 대류계수 상관식과 현장 바람 조건 차이를 단순 승수 범위로 반영 |
+| ASM-054 | IDC cooling utilization-fraction range | 0.87-0.93 | 90% 목표 이용률 주변에서 hot-end 제약이 얼마나 민감한지 보기 위한 운전 목표 범위 |

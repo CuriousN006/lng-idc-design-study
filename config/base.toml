@@ -304,6 +304,34 @@ source_id = "ASM-047"
 value = 0.25
 source_id = "ASM-048"
 
+[uncertainty_analysis.sample_count]
+value = 48
+source_id = "ASM-049"
+
+[uncertainty_analysis.seed]
+value = 42
+source_id = "ASM-049"
+
+[uncertainty_analysis.ambient_air_temp_range_k]
+value = [305.15, 311.15]
+source_id = "ASM-050"
+
+[uncertainty_analysis.overall_u_multiplier_range]
+value = [0.85, 1.15]
+source_id = "ASM-051"
+
+[uncertainty_analysis.insulation_conductivity_multiplier_range]
+value = [0.85, 1.15]
+source_id = "ASM-052"
+
+[uncertainty_analysis.outside_h_multiplier_range]
+value = [0.70, 1.30]
+source_id = "ASM-053"
+
+[uncertainty_analysis.utilization_fraction_range]
+value = [0.87, 0.93]
+source_id = "ASM-054"
+
 [[passive_heat_search.scenarios]]
 name = "baseline_air"
 mode = "air"

@@ -14,6 +14,7 @@ R = TypeVar("R")
 
 HEAVY_COMMANDS = {
     "explore-passive-heat",
+    "uncertainty-study",
 }
 
 
