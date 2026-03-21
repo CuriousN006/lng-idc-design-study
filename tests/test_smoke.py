@@ -4,6 +4,8 @@ from copy import deepcopy
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 from lng_dc_design.baseline_vcc import compute_baseline_cycle
 from lng_dc_design.cli import run_all
 from lng_dc_design.config import load_config
@@ -11,6 +13,7 @@ from lng_dc_design.deliverables import build_deliverables
 from lng_dc_design.fluid_screening import compute_fluid_screening
 from lng_dc_design.hx_lng_vaporizer import design_lng_vaporizer
 from lng_dc_design.idc_hx import evaluate_idc_heat_exchange
+from lng_dc_design.idc_secondary_loop import evaluate_idc_secondary_loop
 from lng_dc_design.load_model import compute_load_model
 from lng_dc_design.parallel import resolve_parallel_options
 from lng_dc_design.pipeline_loop import design_pipeline
@@ -44,6 +47,7 @@ class SmokeTest(unittest.TestCase):
             screening["selected"]["coolprop_name"],
             load_result.total_kw,
         )
+        idc_secondary_loop_result = evaluate_idc_secondary_loop(self.config, idc_hx_result["chilled_water_mass_flow_kg_s"])
         pipeline_result = design_pipeline(self.config, screening["selected"], load_result.total_kw)
         hx_result = design_lng_vaporizer(
             self.config,
@@ -55,7 +59,17 @@ class SmokeTest(unittest.TestCase):
         supply_temperature_sweep = evaluate_supply_temperature_sweep(self.config, load_result, baseline)
         ambient_closure_map = evaluate_ambient_closure_map(self.config, load_result, baseline)
         zero_warmup_target_search = evaluate_zero_warmup_target_search(self.config, load_result, baseline)
-        system_eval = evaluate_system(self.config, load_result, minimum_power, baseline, screening, hx_result, pipeline_result)
+        system_eval = evaluate_system(
+            self.config,
+            load_result,
+            minimum_power,
+            baseline,
+            screening,
+            idc_hx_result,
+            hx_result,
+            pipeline_result,
+            idc_secondary_loop_result,
+        )
 
         self.assertGreater(load_result.total_kw, 11_000.0)
         self.assertGreater(baseline["compressor_power_kw"], minimum_power["minimum_power_kw"])
@@ -64,7 +78,10 @@ class SmokeTest(unittest.TestCase):
         self.assertGreater(idc_hx_result["coolant_after_idc_temp_k"], self.config["coolant_loop"]["supply_temp_k"])
         self.assertGreater(idc_hx_result["minimum_return_to_lng_k"], idc_hx_result["coolant_after_idc_temp_k"])
         self.assertGreaterEqual(idc_hx_result["minimum_line_heat_gain_required_kw"], 0.0)
+        self.assertGreater(float(idc_secondary_loop_result["selected_design"]["pump_power_kw"]), 0.0)
+        self.assertGreater(float(idc_secondary_loop_result["selected_design"]["total_pressure_drop_kpa"]), 0.0)
         self.assertIn("idc_hx_area_m2", screening["selected"])
+        self.assertIn("HEOS::", str(hx_result["lng_fluid"]))
         self.assertGreaterEqual(
             hx_result["min_pinch_k"] + 1e-6,
             self.config["assignment"]["minimum_temperature_approach_k"],
@@ -99,6 +116,7 @@ class SmokeTest(unittest.TestCase):
         self.assertGreater(system_eval["annual"]["cost_saving_krw_per_year"], 0.0)
         self.assertFalse(system_eval["auxiliary_heat_sources"]["table"].empty)
         self.assertIsNotNone(system_eval["auxiliary_heat_sources"]["selected"])
+        self.assertGreater(float(system_eval["capex"]["total_capex_krw"]), 0.0)
 
     def test_build_deliverables(self) -> None:
         run_all(self.project_root / "config" / "base.toml", parallel=False)
@@ -188,6 +206,8 @@ class SmokeTest(unittest.TestCase):
         )
         for column in ["pump_power_kw", "supplemental_warmup_kw", "max_feasible_distance_km"]:
             for serial_value, parallel_value in zip(sweep_serial[column], sweep_parallel[column], strict=True):
+                if pd.isna(serial_value) and pd.isna(parallel_value):
+                    continue
                 self.assertAlmostEqual(float(serial_value), float(parallel_value), places=6)
 
     def test_auxiliary_heat_scenarios_rank_monotonically(self) -> None:
@@ -195,13 +215,29 @@ class SmokeTest(unittest.TestCase):
         minimum_power = compute_theoretical_minimum_power(self.config, load_result.total_kw)
         baseline = compute_baseline_cycle(self.config, load_result.total_kw)
         screening = compute_fluid_screening(self.config, load_result.total_kw)
+        idc_hx_result = evaluate_idc_heat_exchange(
+            self.config,
+            screening["selected"]["coolprop_name"],
+            load_result.total_kw,
+        )
+        idc_secondary_loop_result = evaluate_idc_secondary_loop(self.config, idc_hx_result["chilled_water_mass_flow_kg_s"])
         pipeline_result = design_pipeline(self.config, screening["selected"], load_result.total_kw)
         hx_result = design_lng_vaporizer(
             self.config,
             _merge_fluid_with_pipeline(screening["selected"], pipeline_result),
             float(pipeline_result["selected_design"]["actual_lng_duty_kw"]),
         )
-        system_eval = evaluate_system(self.config, load_result, minimum_power, baseline, screening, hx_result, pipeline_result)
+        system_eval = evaluate_system(
+            self.config,
+            load_result,
+            minimum_power,
+            baseline,
+            screening,
+            idc_hx_result,
+            hx_result,
+            pipeline_result,
+            idc_secondary_loop_result,
+        )
         aux_table = system_eval["auxiliary_heat_sources"]["table"].set_index("scenario_key")
 
         self.assertGreater(
@@ -219,6 +255,19 @@ class SmokeTest(unittest.TestCase):
         result = evaluate_uncertainty_study(trial_config)
         self.assertEqual(len(result["samples"]), 8)
         self.assertIn("selected_fluid: most_common", set(result["summary"]["metric"].tolist()))
+
+    def test_idc_secondary_loop_scan_behaviour(self) -> None:
+        load_result = compute_load_model(self.config)
+        screening = compute_fluid_screening(self.config, load_result.total_kw)
+        idc_hx_result = evaluate_idc_heat_exchange(
+            self.config,
+            screening["selected"]["coolprop_name"],
+            load_result.total_kw,
+        )
+        result = evaluate_idc_secondary_loop(self.config, idc_hx_result["chilled_water_mass_flow_kg_s"])
+        ordered = result["scan_table"].sort_values("diameter_m")
+        self.assertTrue(ordered["velocity_m_per_s"].is_monotonic_decreasing)
+        self.assertTrue(bool(ordered["feasible"].any()))
 
 
 if __name__ == "__main__":

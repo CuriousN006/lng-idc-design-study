@@ -23,6 +23,7 @@ def validate_run(
     screening,
     hx_result,
     pipeline_result,
+    idc_secondary_loop_result,
     system_eval,
     zero_warmup_target_search: dict | None = None,
 ) -> list[str]:
@@ -67,6 +68,19 @@ def validate_run(
     if float(screening["selected"]["idc_hx_area_m2"]) <= 0.0:
         raise AssertionError("IDC-side heat exchanger required area must be positive.")
     messages.append("IDC-side heat exchanger sizing returned a positive required area.")
+
+    secondary_scan = idc_secondary_loop_result["scan_table"].sort_values("diameter_m")
+    if not secondary_scan["velocity_m_per_s"].is_monotonic_decreasing:
+        raise AssertionError("IDC secondary-loop velocity should decrease as diameter increases.")
+    messages.append("IDC secondary-loop velocity decreases with increasing loop diameter.")
+
+    feasible_secondary = secondary_scan[secondary_scan["feasible"]]
+    if feasible_secondary.empty:
+        raise AssertionError("No feasible IDC secondary-loop design was found.")
+    messages.append(
+        f"IDC secondary-loop selected {float(idc_secondary_loop_result['selected_design']['diameter_m']):.3f} m at "
+        f"{float(idc_secondary_loop_result['selected_design']['pump_power_kw']):.1f} kW."
+    )
 
     utilization_target = float(config.values["system_targets"]["idc_cooling_utilization_fraction"])
     if float(screening["selected"]["minimum_hot_end_utilization_fraction"]) < utilization_target - 1e-6:
@@ -148,6 +162,16 @@ def validate_run(
     if annual["avoided_emissions_tco2_per_year"] <= 0.0:
         raise AssertionError("Annual avoided emissions should be positive for the selected LNG design.")
     messages.append("Annualized cost saving and avoided emissions are both positive.")
+
+    if float(system_eval["capex"]["total_capex_krw"]) <= 0.0:
+        raise AssertionError("Core installed CAPEX must be positive.")
+    messages.append(
+        f"Core installed CAPEX estimated at {float(system_eval['capex']['total_capex_krw']) / 1_000_000_000.0:.2f} billion KRW."
+    )
+
+    messages.append(
+        f"Core-system discounted payback estimate is {system_eval['financial_core']['discounted_payback_years'] if not math.isnan(float(system_eval['financial_core']['discounted_payback_years'])) else 'not reached within project life'}."
+    )
 
     auxiliary_heat_sources = system_eval.get("auxiliary_heat_sources", {}).get("table")
     if auxiliary_heat_sources is None or auxiliary_heat_sources.empty:

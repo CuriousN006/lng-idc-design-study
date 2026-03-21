@@ -196,6 +196,84 @@ value = 850.0
 source_id = "ASM-033"
 description = "First-pass overall U estimate for the IDC-side liquid-liquid heat exchanger"
 
+[idc_secondary_loop.parallel_circuits]
+value = 4
+source_id = "ASM-061"
+description = "Equivalent parallel chilled-water distribution circuits serving the full IDC load"
+
+[idc_secondary_loop.horizontal_distribution_length_factor]
+value = 1.4
+source_id = "ASM-062"
+description = "Equivalent supply-return branch length per served floor as a multiple of (building length + width)"
+
+[idc_secondary_loop.diameter_candidates_m]
+value = [0.20, 0.25, 0.30, 0.35, 0.40, 0.45]
+source_id = "ASM-063"
+
+[idc_secondary_loop.pipe_roughness_m]
+value = 4.5e-5
+source_id = "ASM-063"
+
+[idc_secondary_loop.minor_loss_k]
+value = 18.0
+source_id = "ASM-064"
+
+[idc_secondary_loop.idc_hx_pressure_drop_kpa]
+value = 45.0
+source_id = "ASM-064"
+
+[idc_secondary_loop.coil_and_valve_pressure_drop_kpa]
+value = 60.0
+source_id = "ASM-064"
+
+[idc_secondary_loop.miscellaneous_pressure_drop_kpa]
+value = 20.0
+source_id = "ASM-064"
+
+[idc_secondary_loop.pump_efficiency]
+value = 0.75
+source_id = "ASM-065"
+
+[idc_secondary_loop.max_water_velocity_m_per_s]
+value = 2.5
+source_id = "ASM-065"
+
+[idc_secondary_loop.max_total_pressure_drop_kpa]
+value = 250.0
+source_id = "ASM-065"
+
+[lng_mixture.backend]
+value = "HEOS"
+source_id = "SRC-020"
+
+[lng_mixture.label]
+value = "Peak-shaving LNG surrogate"
+source_id = "ASM-055"
+
+[lng_mixture.transport_property_proxy]
+value = "Methane"
+source_id = "ASM-069"
+
+[lng_mixture.component_mole_percent.Methane]
+value = 95.3
+source_id = "SRC-019"
+
+[lng_mixture.component_mole_percent.Ethane]
+value = 4.1
+source_id = "SRC-019"
+
+[lng_mixture.component_mole_percent.Propane]
+value = 0.43
+source_id = "SRC-019"
+
+[lng_mixture.component_mole_percent."n-Butane"]
+value = 0.08
+source_id = "SRC-019"
+
+[lng_mixture.component_mole_percent.Nitrogen]
+value = 0.02
+source_id = "SRC-019"
+
 [hx_design.segment_boundaries_k]
 value = [112.0, 190.0, 205.0, 220.0, 283.0]
 source_id = "ASM-020"
@@ -379,6 +457,54 @@ source_id = "SRC-013"
 [economic_inputs.simple_payback_years]
 value = [3, 5, 7, 10]
 source_id = "ASM-031"
+
+[economic_inputs.cost_indexing.base_year_cpi_u]
+value = 163.0
+source_id = "SRC-022"
+
+[economic_inputs.cost_indexing.current_cpi_u]
+value = 326.785
+source_id = "SRC-023"
+
+[economic_inputs.cost_indexing.krw_per_usd]
+value = 1447.2858
+source_id = "SRC-024"
+
+[economic_inputs.financial.project_life_years]
+value = 20
+source_id = "ASM-066"
+
+[economic_inputs.financial.discount_rate_fraction]
+value = 0.08
+source_id = "ASM-067"
+
+[economic_inputs.financial.annual_om_fraction_of_capex]
+value = 0.02
+source_id = "ASM-068"
+
+[economic_inputs.financial.salvage_fraction_of_capex]
+value = 0.00
+source_id = "ASM-068"
+
+[economic_inputs.capex_models.cryogenic_hx_installation_multiplier]
+value = 1.60
+source_id = "ASM-057"
+
+[economic_inputs.capex_models.idc_hx_installation_multiplier]
+value = 1.10
+source_id = "ASM-058"
+
+[economic_inputs.capex_models.cryogenic_pipeline_installation_multiplier]
+value = 1.35
+source_id = "ASM-059"
+
+[economic_inputs.capex_models.pump_installation_multiplier]
+value = 1.00
+source_id = "SRC-021"
+
+[economic_inputs.capex_models.balance_of_plant_fraction]
+value = 0.15
+source_id = "ASM-060"
 
 [auxiliary_heat_sources.electric_resistance_heater]
 label = "Electric resistance heater"

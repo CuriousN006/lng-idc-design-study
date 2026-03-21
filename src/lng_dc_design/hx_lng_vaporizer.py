@@ -4,6 +4,7 @@ import math
 
 import pandas as pd
 
+from .lng_mixture import build_lng_mixture_definition
 from .thermo import bundle_shell_diameter_m, log_mean_temperature_difference, props_si
 
 
@@ -25,8 +26,11 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
     pressure_pa = loop["pressure_mpa"] * 1_000_000.0
     lng_pressure_pa = assignment["lng_pressure_mpa"] * 1_000_000.0
     cold_bounds = hx_cfg["segment_boundaries_k"]
+    lng_mixture = build_lng_mixture_definition(config)
+    lng_fluid = lng_mixture.coolprop_string
+    lng_transport_fluid = str(config.get("lng_mixture", {}).get("transport_property_proxy", lng_fluid))
 
-    h_lng = [props_si("H", "T", temp_k, "P", lng_pressure_pa, "Methane") for temp_k in cold_bounds]
+    h_lng = [props_si("H", "T", temp_k, "P", lng_pressure_pa, lng_fluid) for temp_k in cold_bounds]
     q_total_w = required_lng_duty_kw * 1000.0
     m_lng = q_total_w / (h_lng[-1] - h_lng[0])
     q_segments = [m_lng * (h_lng[i + 1] - h_lng[i]) for i in range(len(cold_bounds) - 1)]
@@ -78,10 +82,10 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
                 lng_mean_t = 0.5 * (cold_in + cold_out)
                 hot_mean_t = 0.5 * (hot_in + hot_out)
 
-                mu_tube = props_si("V", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
-                k_tube = props_si("L", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
-                cp_tube = props_si("C", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
-                rho_tube = props_si("D", "T", lng_mean_t, "P", lng_pressure_pa, "Methane")
+                mu_tube = props_si("V", "T", lng_mean_t, "P", lng_pressure_pa, lng_transport_fluid)
+                k_tube = props_si("L", "T", lng_mean_t, "P", lng_pressure_pa, lng_transport_fluid)
+                cp_tube = props_si("C", "T", lng_mean_t, "P", lng_pressure_pa, lng_transport_fluid)
+                rho_tube = props_si("D", "T", lng_mean_t, "P", lng_pressure_pa, lng_transport_fluid)
 
                 mu_shell = props_si("V", "T", hot_mean_t, "P", pressure_pa, fluid)
                 k_shell = props_si("L", "T", hot_mean_t, "P", pressure_pa, fluid)
@@ -161,6 +165,10 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
 
     return {
         "selected_fluid": fluid,
+        "lng_mixture_label": lng_mixture.label,
+        "lng_fluid": lng_fluid,
+        "lng_transport_fluid": lng_transport_fluid,
+        "lng_normalized_components": lng_mixture.normalized_components,
         "required_lng_duty_kw": required_lng_duty_kw,
         "m_lng_kg_s": m_lng,
         "m_coolant_kg_s": m_hot,

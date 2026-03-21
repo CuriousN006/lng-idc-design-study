@@ -21,9 +21,17 @@
 | SRC-016 | EnergyPlus Ground Heat Exchanger example page | [EnergyPlus Ground Heat Exchanger](https://bigladdersoftware.com/epx/docs/8-0/input-output-reference/page-026.html), `references/web/energyplus_ground_heat_exchanger_reference.html` | Official web | buried pipe example inputs including burial depth 1.25 m and soil thermal conductivity 1.08 W/m-K | buried-pipe passive heat scenario basis |
 | SRC-017 | NREL NSRDB documentation | [NREL NSRDB](https://developer.nrel.gov/docs/solar/nsrdb/), `references/web/nrel_nsrdb_api.html` | Official web | 태양복사(GHI)·기온·풍속이 시간해상도 기상 입력으로 제공된다는 공식 데이터 체계 | passive heat scenario documentation, future weather-driven extensions |
 | SRC-018 | EnergyPlus Site:GroundTemperature:Undisturbed documentation | [EnergyPlus Ground Temperature Reference](https://bigladdersoftware.com/epx/docs/8-8/input-output-reference/group-location-climate-weather-file-access.html), `references/web/energyplus_ground_temperature_reference.html` | Official web | Kusuda-Achenbach 기반 지중온도 입력 구조와 example annual-average ground surface temperature 15.5 C | buried-pipe passive heat scenario basis, future soil-temperature model |
+| SRC-019 | AFDC LNG Resource Guide | [AFDC LNG Resource Guide](https://afdc.energy.gov/files/pdfs/lng_resource_guide.pdf), `references/web/afdc_lng_resource_guide.pdf` | Official PDF | Peak-shaving LNG 평균 조성: CH4 95.3%, C2H6 4.1%, C3H8 0.43%, C4H10 0.08%, N2 0.02%; LNG는 정제 후 mostly methane 85-99% | mixed-LNG surrogate composition, LNG documentation |
+| SRC-020 | CoolProp Mixtures documentation | [CoolProp Mixtures](https://coolprop.org/fluid_properties/Mixtures.html), `references/web/coolprop_mixtures.html` | Official web | HEOS mixture string 형식과 mixture flash 지원 범위 | mixed-LNG property implementation |
+| SRC-021 | NETL Process Equipment Cost Estimation Final Report | [NETL cost report](https://www.osti.gov/servlets/purl/797810), `references/web/netl_process_equipment_cost_report.pdf` | Official PDF | Shell-and-tube heat exchanger installed cost table; centrifugal pump installed cost table; 1Q 1998 USD basis | CAPEX model for exchangers and pumps |
+| SRC-022 | BLS historical CPI-U table | [Historical CPI-U](https://www.bls.gov/cpi/tables/historical-cpi-u-201708.pdf) | Official PDF | 1998 annual average CPI-U = 163.0 | CAPEX escalation from 1998 USD |
+| SRC-023 | FRED CPIAUCSL monthly CPI series | [FRED CPIAUCSL](https://fred.stlouisfed.org/graph/?g=1ODfK) | Official data portal | 2026-02 CPI-U all-items index = 326.785 used as current-price escalation anchor | CAPEX escalation to current USD |
+| SRC-024 | FRED South Korean won to U.S. dollar spot exchange rate | [FRED EXKOUS](https://fred.stlouisfed.org/data/EXKOUS) | Official data portal | 2026-02 monthly average KRW/USD = 1447.2858 | CAPEX conversion from escalated USD to KRW |
+| SRC-025 | DOE H2A hydrogen delivery interim report | [DOE H2A report](https://www1.eere.energy.gov/hydrogenandfuelcells/pdfs/nexant_h2a.pdf) | Official PDF | Urban steel distribution pipeline cost trend lines and unit-cost tables in USD/mile | LNG external pipeline CAPEX baseline before cryogenic multiplier |
 
 ## Notes
 
 - HTML 페이지는 캐시 보관이 필수는 아니므로 URL과 접근일을 기록하고, 필요 시 `references/web/`에 스냅샷을 추가합니다.
 - 로컬 제공 PDF는 원본의 작업용 사본을 `references/local/`에 둡니다.
 - `passive_heat_search`의 모든 숫자가 직접 문헌 고정값인 것은 아닙니다. `SRC-015`~`SRC-018`은 모델식과 대표 예시 입력의 근거이고, 실제 시나리오 값 중 탐색용 envelope는 `docs/assumptions.md`의 `ASM-040`~`ASM-042`로 별도 추적합니다.
+- `SRC-023`의 current CPI anchor는 2026-03-21 기준 최신 공개 월별 CPI-U 값을 반영한 값입니다. 이 값이 바뀌면 CAPEX 환산 결과도 함께 업데이트해야 합니다.

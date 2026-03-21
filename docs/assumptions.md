@@ -58,3 +58,18 @@
 | ASM-052 | Insulation conductivity multiplier range | 0.85-1.15 | 단열재 성능 편차와 시공 오차를 간략 반영 |
 | ASM-053 | Outside convection multiplier range | 0.70-1.30 | 외부 대류계수 상관식과 현장 바람 조건 차이를 단순 승수 범위로 반영 |
 | ASM-054 | IDC cooling utilization-fraction range | 0.87-0.93 | 90% 목표 이용률 주변에서 hot-end 제약이 얼마나 민감한지 보기 위한 운전 목표 범위 |
+| ASM-055 | Mixed-LNG surrogate label and usage | Peak-shaving LNG surrogate with fixed composition | 한국 수입 LNG의 실제 월별 조성 대신 문헌에 공개된 대표 LNG 조성을 사용해 혼합 LNG 거동을 반영하기 위한 고정 surrogate |
+| ASM-056 | Mixed-LNG normalization rule | AFDC peak-shaving composition is renormalized to sum to 1.0 before building the CoolProp mixture string | 공개 표의 반올림 오차를 제거하고 CoolProp 입력에 바로 쓰기 위한 정규화 절차 |
+| ASM-057 | Cryogenic LNG vaporizer installation multiplier | 1.60 x generic shell-and-tube installed cost | NETL의 일반 탄소강 열교환기 비용표를 극저온 LNG 기화기 서비스에 맞춰 보수적으로 상향하는 계수 |
+| ASM-058 | IDC-side HX installation multiplier | 1.10 x generic shell-and-tube installed cost | IDC측 액체-액체 열교환기는 일반 공정 열교환기와 유사한 설치 수준이지만 compact skid/controls를 반영해 소폭 상향 |
+| ASM-059 | Cryogenic pipeline installation multiplier | 1.35 x urban steel distribution pipeline cost | 도심 배관 단가에 극저온 단열, 재킷, 시공 난이도를 반영하는 보수적 승수 |
+| ASM-060 | Balance-of-plant fraction for CAPEX | 15% of direct CAPEX | 기초, 제어, 연결 배관, 계장, 시운전 등 직접 장비비 외 통합비를 1차 근사로 반영 |
+| ASM-061 | IDC secondary-loop topology | 4 parallel chilled-water distribution circuits | 다층 IDC에서 하나의 거대 단일 루프보다 복수 회로 분배가 현실적이라는 점을 반영한 2차 루프 기본 구조 |
+| ASM-062 | IDC secondary-loop equivalent horizontal length | 1.4 x (building length + width) per served floor | 각 층 헤더/분기관을 상세 배관망 없이 등가 길이로 환산하기 위한 1차 근사 |
+| ASM-063 | IDC secondary-loop pipe grid and roughness | 0.20-0.45 m diameter, 4.5e-5 m roughness | 대형 chilled-water trunk에 대한 자동 직경 탐색 범위와 탄소강 roughness 기본값 |
+| ASM-064 | IDC secondary-loop lumped pressure losses | minor K=18, HX 45 kPa, coil+valve 60 kPa, misc 20 kPa | 상세 단말기/밸브/헤더 모델 대신 분산 손실과 terminal loss를 총합 pressure-drop allowance로 반영 |
+| ASM-065 | IDC secondary-loop hydraulic design limits | pump efficiency 75%, max water velocity 2.5 m/s, max total DP 250 kPa | chilled-water 순환계의 보수적 설계 상한을 두어 과도한 직경 축소를 방지 |
+| ASM-066 | Project financial life | 20 years | 장거리 배관과 열교환기 중심의 인프라성 설비라는 점을 반영한 평가 기간 |
+| ASM-067 | Discount rate for NPV/IRR | 8% | 민간 설비투자 관점의 보수적 nominal discount rate 근사 |
+| ASM-068 | O&M and salvage for financial model | annual O&M 2% of CAPEX, salvage 0% | order-of-magnitude 수준의 경제성 평가에서 유지관리와 잔존가치를 단순화하기 위한 금융 가정 |
+| ASM-069 | LNG tube-side transport-property proxy | Use pure methane for tube-side viscosity, conductivity, density, and heat capacity while keeping mixture enthalpy for duty partitioning | CoolProp의 극저온 혼합 LNG transport-property flash가 불안정한 구간을 피하면서 혼합 LNG의 엔탈피 기반 효과는 유지하기 위한 절충 |

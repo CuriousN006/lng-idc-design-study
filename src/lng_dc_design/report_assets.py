@@ -95,6 +95,24 @@ def _save_idc_hx_profile(output_dir: Path, idc_hx_result: dict) -> None:
     plt.close(fig)
 
 
+def _save_idc_secondary_loop_scan(output_dir: Path, idc_secondary_loop_result: dict) -> None:
+    frame = idc_secondary_loop_result["scan_table"]
+    fig, ax1 = plt.subplots(figsize=(8, 5))
+    ax1.plot(frame["diameter_m"], frame["pump_power_kw"], marker="o", color="#8b1e3f")
+    ax1.set_xlabel("Equivalent loop diameter (m)")
+    ax1.set_ylabel("Pump power (kW)", color="#8b1e3f")
+    ax1.tick_params(axis="y", labelcolor="#8b1e3f")
+
+    ax2 = ax1.twinx()
+    ax2.plot(frame["diameter_m"], frame["total_pressure_drop_kpa"], marker="s", color="#1d7874")
+    ax2.set_ylabel("Total pressure drop (kPa)", color="#1d7874")
+    ax2.tick_params(axis="y", labelcolor="#1d7874")
+    ax1.set_title("IDC Secondary-Loop Diameter Scan")
+    fig.tight_layout()
+    fig.savefig(output_dir / "idc_secondary_loop_scan.png", dpi=180)
+    plt.close(fig)
+
+
 def _save_hx_geometry_scan(output_dir: Path, hx_result: dict) -> None:
     frame = hx_result["geometry_candidates"]
     feasible = frame[frame["feasible"]]
@@ -293,6 +311,20 @@ def _save_auxiliary_heat_sources(output_dir: Path, auxiliary_heat_sources: pd.Da
     plt.close(fig)
 
 
+def _save_capex_breakdown(output_dir: Path, capex_table: pd.DataFrame) -> None:
+    if capex_table.empty:
+        return
+    ordered = capex_table.sort_values("installed_cost_krw", ascending=False)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(ordered["component"], ordered["installed_cost_krw"] / 1_000_000_000.0, color="#5c6b73")
+    ax.set_ylabel("Installed cost (billion KRW)")
+    ax.set_title("Core CAPEX Breakdown")
+    ax.tick_params(axis="x", rotation=20)
+    fig.tight_layout()
+    fig.savefig(output_dir / "capex_breakdown.png", dpi=180)
+    plt.close(fig)
+
+
 def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
     source_map = {row["metric"]: row["source_ids"] for _, row in system_eval["summary"].iterrows()}
     return pd.DataFrame(
@@ -333,11 +365,25 @@ def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
                 "source_ids": source_map["IDC-side HX required area"],
             },
             {
+                "requirement": "IDC secondary chilled-water loop hydraulic model",
+                "status": "Complete",
+                "evidence_metric": "IDC secondary-loop pump power",
+                "primary_output": "output/idc_secondary_loop_scan.csv; output/figures/idc_secondary_loop_scan.png; output/summary.csv",
+                "source_ids": source_map["IDC secondary-loop pump power"],
+            },
+            {
                 "requirement": "Shell-and-tube LNG vaporizer design",
                 "status": "Complete",
                 "evidence_metric": "LNG vaporizer duty",
                 "primary_output": "output/hx_segments.csv; output/hx_geometry_candidates_top100.csv; output/figures/hx_temperature_profile.png",
                 "source_ids": source_map["LNG vaporizer duty"],
+            },
+            {
+                "requirement": "Mixed-LNG surrogate property model",
+                "status": "Complete",
+                "evidence_metric": "LNG stream model",
+                "primary_output": "output/summary.csv; output/hx_segments.csv",
+                "source_ids": source_map["LNG stream model"],
             },
             {
                 "requirement": "10 km coolant pipeline design",
@@ -360,6 +406,13 @@ def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
                 "primary_output": "output/summary.csv; output/legacy_comparison.csv; output/figures/system_power_comparison.png",
                 "source_ids": source_map["Baseline-to-LNG power saving"],
             },
+            {
+                "requirement": "Installed CAPEX and discounted project economics",
+                "status": "Complete",
+                "evidence_metric": "Core-system NPV",
+                "primary_output": "output/capex_breakdown.csv; output/financial_summary.csv; output/figures/capex_breakdown.png",
+                "source_ids": source_map["Core-system NPV"],
+            },
         ]
     )
 
@@ -372,6 +425,7 @@ def write_outputs(
     baseline: dict,
     screening: dict,
     idc_hx_result: dict,
+    idc_secondary_loop_result: dict,
     hx_result: dict,
     pipeline_result: dict,
     scenario_result: dict,
@@ -391,6 +445,7 @@ def write_outputs(
     system_eval["summary"][["metric", "source_ids"]].to_csv(output_dir / "source_map.csv", index=False)
     baseline["cycle_points"].to_csv(output_dir / "baseline_cycle_points.csv", index=False)
     idc_hx_result["profile"].to_csv(output_dir / "idc_hx_profile.csv", index=False)
+    idc_secondary_loop_result["scan_table"].to_csv(output_dir / "idc_secondary_loop_scan.csv", index=False)
     hx_result["segments"].to_csv(output_dir / "hx_segments.csv", index=False)
     hx_result["geometry_candidates"].head(100).to_csv(output_dir / "hx_geometry_candidates_top100.csv", index=False)
     pipeline_result["scan_table"].head(200).to_csv(output_dir / "pipeline_scan_top200.csv", index=False)
@@ -414,6 +469,19 @@ def write_outputs(
     annual_summary.to_csv(output_dir / "annual_summary.csv", index=False)
     system_eval["annual"]["payback_table"].to_csv(output_dir / "payback_allowable_capex.csv", index=False)
     system_eval["auxiliary_heat_sources"]["table"].to_csv(output_dir / "auxiliary_heat_sources.csv", index=False)
+    system_eval["capex"]["table"].to_csv(output_dir / "capex_breakdown.csv", index=False)
+    pd.DataFrame(
+        [
+            {"metric": "Core installed CAPEX", "value": system_eval["capex"]["total_capex_krw"], "unit": "KRW"},
+            {"metric": "Core annual O&M", "value": system_eval["financial_core"]["annual_om_cost_krw_per_year"], "unit": "KRW/year"},
+            {"metric": "Core net annual cashflow", "value": system_eval["financial_core"]["net_annual_cashflow_krw_per_year"], "unit": "KRW/year"},
+            {"metric": "Core NPV", "value": system_eval["financial_core"]["npv_krw"], "unit": "KRW"},
+            {"metric": "Core IRR", "value": system_eval["financial_core"]["irr_fraction"], "unit": "-"},
+            {"metric": "Core discounted payback", "value": system_eval["financial_core"]["discounted_payback_years"], "unit": "years"},
+            {"metric": "Best-hybrid NPV", "value": system_eval["financial_best_hybrid"]["npv_krw"], "unit": "KRW"},
+            {"metric": "Best-hybrid IRR", "value": system_eval["financial_best_hybrid"]["irr_fraction"], "unit": "-"},
+        ]
+    ).to_csv(output_dir / "financial_summary.csv", index=False)
     if legacy_result and legacy_result.get("available"):
         legacy_result["table"].to_csv(output_dir / "legacy_comparison.csv", index=False)
 
@@ -421,6 +489,7 @@ def write_outputs(
     _save_fluid_ranking(figure_dir, screening["table"])
     _save_baseline_cycle(figure_dir, baseline)
     _save_idc_hx_profile(figure_dir, idc_hx_result)
+    _save_idc_secondary_loop_scan(figure_dir, idc_secondary_loop_result)
     _save_hx_profile(figure_dir, hx_result)
     _save_hx_geometry_scan(figure_dir, hx_result)
     _save_pipeline_tradeoff(figure_dir, pipeline_result)
@@ -433,6 +502,7 @@ def write_outputs(
     _save_zero_warmup_gap(figure_dir, zero_warmup_target_search["table"])
     _save_annual_impact(figure_dir, system_eval["annual"])
     _save_auxiliary_heat_sources(figure_dir, system_eval["auxiliary_heat_sources"]["table"])
+    _save_capex_breakdown(figure_dir, system_eval["capex"]["table"])
 
     base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
     base_distance_row = distance_scenarios.loc[base_distance_index]
@@ -464,8 +534,11 @@ def write_outputs(
         f"- Selected coolant score: **{screening['selected']['score']:.3f}**",
         f"- IDC-side HX required area: **{idc_hx_result['required_area_m2']:,.1f} m2**",
         f"- IDC-side HX minimum pinch: **{idc_hx_result['min_pinch_k']:.2f} K**",
+        f"- IDC secondary-loop pump power: **{idc_secondary_loop_result['selected_design']['pump_power_kw']:,.1f} kW**",
+        f"- IDC secondary-loop diameter: **{idc_secondary_loop_result['selected_design']['diameter_m']:.3f} m**",
         f"- IDC outlet coolant temperature: **{idc_hx_result['coolant_after_idc_temp_k']:.2f} K**",
         f"- LNG-inlet return temperature: **{hx_result['return_to_lng_temp_k']:.2f} K**",
+        f"- LNG stream model: **{hx_result['lng_mixture_label']}**",
         f"- LNG vaporizer geometry: **{int(hx_result['selected_geometry']['tube_count'])} tubes x {hx_result['selected_geometry']['tube_length_m']:.1f} m**",
         f"- LNG vaporizer shell diameter: **{hx_result['selected_geometry']['shell_diameter_m']:.3f} m**",
         f"- Pipeline IDs: **supply {pipeline_result['selected_design']['supply_id_m']:.3f} m / return {pipeline_result['selected_design']['return_id_m']:.3f} m**",
@@ -494,8 +567,15 @@ def write_outputs(
         f"- Annual electricity saving: **{system_eval['annual']['energy_saving_mwh_per_year']:,.1f} MWh/year**",
         f"- Annual electricity cost saving: **{system_eval['annual']['cost_saving_krw_per_year'] / 1_000_000.0:,.1f} million KRW/year**",
         f"- Annual avoided indirect emissions: **{system_eval['annual']['avoided_emissions_tco2_per_year']:,.1f} tCO2/year**",
+        f"- Core installed CAPEX: **{system_eval['capex']['total_capex_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
+        f"- Core-system NPV: **{system_eval['financial_core']['npv_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
+        (
+            f"- Core-system IRR: **{system_eval['financial_core']['irr_fraction'] * 100.0:,.2f}%**"
+            if pd.notna(system_eval["financial_core"]["irr_fraction"])
+            else "- Core-system IRR: **not defined**"
+        ),
         f"- Allowable incremental CAPEX at 5-year payback: **{system_eval['annual']['payback_table'].set_index('payback_years').loc[5, 'allowable_incremental_capex_krw'] / 1_000_000.0:,.1f} million KRW**",
-        "- Economic boundary: **baseline compressor power vs LNG loop pump power only**",
+        "- Economic boundary: **baseline compressor power vs core LNG system electric demand (LNG loop pump + IDC secondary-loop pump)**",
         "",
         "## Hybrid Auxiliary-Heat Scenarios",
         "",
@@ -606,16 +686,19 @@ def write_outputs(
             "- `output/summary.csv`",
             "- `output/fluid_ranking.csv`",
             "- `output/alternative_designs.csv`",
+            "- `output/capex_breakdown.csv`",
             "- `output/distance_scenarios.csv`",
             "- `output/supply_temperature_sweep.csv`",
             "- `output/ambient_closure_map.csv`",
             "- `output/zero_warmup_target_search.csv`",
             "- `output/annual_summary.csv`",
             "- `output/auxiliary_heat_sources.csv`",
+            "- `output/financial_summary.csv`",
             "- `output/payback_allowable_capex.csv`",
             "- `output/requirement_traceability.csv`",
             "- `output/source_map.csv`",
             "- `output/idc_hx_profile.csv`",
+            "- `output/idc_secondary_loop_scan.csv`",
             "- `output/hx_segments.csv`",
             "- `output/pipeline_sensitivity.csv`",
             "- `output/figures/*.png`",

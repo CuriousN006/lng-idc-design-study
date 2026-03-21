@@ -9,6 +9,7 @@ from .deliverables import build_deliverables, build_presentation, build_report, 
 from .fluid_screening import compute_fluid_screening
 from .hx_lng_vaporizer import design_lng_vaporizer
 from .idc_hx import evaluate_idc_heat_exchange
+from .idc_secondary_loop import evaluate_idc_secondary_loop
 from .legacy_compare import compare_with_legacy_excel
 from .load_model import compute_load_model
 from .parallel import default_parallel_enabled_for_command, resolve_parallel_options
@@ -42,6 +43,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
     legacy_result = compare_with_legacy_excel(project_root, baseline, minimum_power)
     screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
     idc_hx_result = evaluate_idc_heat_exchange(values, screening["selected"]["coolprop_name"], load_result.total_kw)
+    idc_secondary_loop_result = evaluate_idc_secondary_loop(values, idc_hx_result["chilled_water_mass_flow_kg_s"])
     pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
     hx_result = design_lng_vaporizer(
         values,
@@ -53,7 +55,18 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
     supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline, parallel_options=parallel_options)
     ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
     zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
-    system_eval = evaluate_system(values, load_result, minimum_power, baseline, screening, hx_result, pipeline_result, legacy_result)
+    system_eval = evaluate_system(
+        values,
+        load_result,
+        minimum_power,
+        baseline,
+        screening,
+        idc_hx_result,
+        hx_result,
+        pipeline_result,
+        idc_secondary_loop_result,
+        legacy_result,
+    )
     validation_messages = validate_run(
         project_root,
         cfg,
@@ -63,6 +76,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         screening,
         hx_result,
         pipeline_result,
+        idc_secondary_loop_result,
         system_eval,
         zero_warmup_target_search,
     )
@@ -74,6 +88,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         baseline,
         screening,
         idc_hx_result,
+        idc_secondary_loop_result,
         hx_result,
         pipeline_result,
         scenario_result,
@@ -92,6 +107,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         "legacy": legacy_result,
         "screening": screening,
         "idc_hx": idc_hx_result,
+        "idc_secondary_loop": idc_secondary_loop_result,
         "hx": hx_result,
         "pipeline": pipeline_result,
         "scenario": scenario_result,
@@ -120,7 +136,7 @@ def main() -> int:
         print(f"Selected coolant: {results['screening']['selected']['fluid']}")
         print(f"IDC total cooling load: {results['load'].total_kw:,.1f} kW")
         print(f"Baseline power: {results['baseline']['compressor_power_kw']:,.1f} kW")
-        print(f"LNG loop pump power: {results['system']['pump_power_kw']:,.1f} kW")
+        print(f"Core LNG system power: {results['system']['core_system_power_kw']:,.1f} kW")
         return 0
 
     cfg = load_config(config_path)
@@ -160,6 +176,8 @@ def main() -> int:
         minimum_power = compute_theoretical_minimum_power(values, load_result.total_kw)
         baseline = compute_baseline_cycle(values, load_result.total_kw)
         screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
+        idc_hx_result = evaluate_idc_heat_exchange(values, screening["selected"]["coolprop_name"], load_result.total_kw)
+        idc_secondary_loop_result = evaluate_idc_secondary_loop(values, idc_hx_result["chilled_water_mass_flow_kg_s"])
         pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
         hx_result = design_lng_vaporizer(
             values,
@@ -172,6 +190,8 @@ def main() -> int:
         ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
         zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
         print(distance_scenarios.to_string(index=False))
+        print()
+        print(idc_secondary_loop_result["scan_table"].to_string(index=False))
         print()
         print(supply_temperature_sweep.to_string(index=False))
         print()

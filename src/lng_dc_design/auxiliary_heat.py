@@ -5,9 +5,13 @@ import pandas as pd
 from .economics import compute_annual_metrics
 
 
-def evaluate_auxiliary_heat_sources(config: dict, baseline_power_kw: float, pipeline_result: dict) -> dict[str, object]:
+def evaluate_auxiliary_heat_sources(
+    config: dict,
+    baseline_power_kw: float,
+    pipeline_result: dict,
+    core_system_power_kw: float,
+) -> dict[str, object]:
     selected_design = pipeline_result["selected_design"]
-    pump_power_kw = float(selected_design["pump_power_kw"])
     supplemental_warmup_kw = float(selected_design.get("supplemental_warmup_kw", 0.0))
     source_config = config.get("auxiliary_heat_sources", {})
 
@@ -16,7 +20,7 @@ def evaluate_auxiliary_heat_sources(config: dict, baseline_power_kw: float, pipe
         electric_intensity = float(metadata["electric_intensity_kw_per_kwth"])
         fixed_parasitic_kw = float(metadata.get("fixed_parasitic_kw", 0.0))
         auxiliary_power_kw = supplemental_warmup_kw * electric_intensity + fixed_parasitic_kw
-        total_system_power_kw = pump_power_kw + auxiliary_power_kw
+        total_system_power_kw = core_system_power_kw + auxiliary_power_kw
         annual_metrics = compute_annual_metrics(config, baseline_power_kw, total_system_power_kw)
         rows.append(
             {
@@ -27,7 +31,7 @@ def evaluate_auxiliary_heat_sources(config: dict, baseline_power_kw: float, pipe
                 "fixed_parasitic_kw": fixed_parasitic_kw,
                 "supplemental_warmup_kw": supplemental_warmup_kw,
                 "auxiliary_power_kw": auxiliary_power_kw,
-                "pump_power_kw": pump_power_kw,
+                "core_system_power_kw": core_system_power_kw,
                 "total_system_power_kw": total_system_power_kw,
                 "net_power_saving_kw": baseline_power_kw - total_system_power_kw,
                 "annual_energy_saving_mwh_per_year": annual_metrics["energy_saving_mwh_per_year"],
