@@ -193,6 +193,8 @@ def main() -> int:
             for target_distance_m, result in distance_map.items():
                 near_best = result["near_best"]
                 warmup_free = result["warmup_free"]
+                practical = passive_search["practical_selected_by_scenario"][scenario_name][target_distance_m]
+                practical_warmup_free = practical["warmup_free"]
                 if warmup_free is not None:
                     print(
                         f"{target_distance_m / 1000.0:.1f} km: warm-up-free design found at "
@@ -207,6 +209,13 @@ def main() -> int:
                     )
                 else:
                     print(f"{target_distance_m / 1000.0:.1f} km: no feasible candidate")
+                if practical_warmup_free is not None:
+                    print(
+                        f"  practical filter: retained at {practical_warmup_free['supply_temp_c']:.1f} C / "
+                        f"{practical_warmup_free['fluid']}, pump {practical_warmup_free['best_design_pump_power_kw']:.1f} kW"
+                    )
+                else:
+                    print("  practical filter: no warm-up-free design survived")
             print()
         return 0
 

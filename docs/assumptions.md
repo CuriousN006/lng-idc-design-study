@@ -50,3 +50,5 @@
 | ASM-044 | Ambient-air trim heater model | 0.02 kWe/kWth, fixed 15 kW | 저급 외기열을 회수하고 팬/순환펌프 전력만 전기 페널티로 보는 느슨한 보조 가열 시나리오 |
 | ASM-045 | Waste-heat recovery loop model | 0.01 kWe/kWth, fixed 10 kW | 인접 폐열원/온배수 루프에서 열을 받아오고 소규모 순환동력만 부담하는 회수형 시나리오 |
 | ASM-046 | Heat-pump booster model | 0.25 kWe/kWth, fixed 20 kW | 보조 열원을 적극적으로 끌어올리는 소형 heat pump booster의 유효 전력비를 COP 4 수준으로 근사한 시나리오 |
+| ASM-047 | Minimum practical insulation thickness in passive warm-up studies | 0.05 m | 무보조 성립 여부를 보더라도 산업 배관에 최소한의 단열은 남아 있어야 한다는 현실성 필터 |
+| ASM-048 | Maximum practical passive-heat fraction of IDC load | 25% of modeled cooling load | 환경에서 과도하게 열을 주워오는 해를 배제하고, 수동 가열이 부하의 일부만 담당하는 범위를 실무형 필터로 두기 위한 기준 |

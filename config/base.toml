@@ -296,6 +296,14 @@ source_id = "ASM-038"
 value = [0.0, 0.01, 0.025, 0.05, 0.075, 0.10, 0.125, 0.15]
 source_id = "ASM-039"
 
+[practical_passive_constraints.minimum_insulation_thickness_m]
+value = 0.05
+source_id = "ASM-047"
+
+[practical_passive_constraints.maximum_total_heat_gain_fraction_of_load]
+value = 0.25
+source_id = "ASM-048"
+
 [[passive_heat_search.scenarios]]
 name = "baseline_air"
 mode = "air"

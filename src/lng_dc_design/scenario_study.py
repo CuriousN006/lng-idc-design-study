@@ -562,6 +562,37 @@ def _evaluate_passive_zero_warmup_task(task: dict[str, object]) -> list[dict[str
     return rows
 
 
+def _apply_practical_passive_filters(config: dict, frame: pd.DataFrame) -> pd.DataFrame:
+    constraints = config.get("practical_passive_constraints", {})
+    minimum_insulation_thickness_m = float(constraints.get("minimum_insulation_thickness_m", 0.0))
+    maximum_total_heat_gain_fraction_of_load = float(
+        constraints.get("maximum_total_heat_gain_fraction_of_load", math.inf)
+    )
+
+    output = frame.copy()
+    output["best_design_total_heat_gain_fraction_of_load"] = (
+        output["best_design_total_heat_gain_kw"] / output["required_cooling_kw"].clip(lower=1e-9)
+    )
+
+    practical_flags: list[bool] = []
+    practical_failure_reasons: list[str] = []
+    for _, row in output.iterrows():
+        reasons: list[str] = []
+        if row["status"] != "feasible":
+            reasons.append("infeasible")
+        if float(row["best_design_insulation_thickness_m"]) + 1e-9 < minimum_insulation_thickness_m:
+            reasons.append("insulation below practical minimum")
+        if float(row["best_design_total_heat_gain_fraction_of_load"]) > maximum_total_heat_gain_fraction_of_load + 1e-9:
+            reasons.append("passive heat fraction exceeds practical limit")
+        practical_flags.append(not reasons)
+        practical_failure_reasons.append("; ".join(reasons))
+
+    output["practical_candidate"] = practical_flags
+    output["practical_failure_reasons"] = practical_failure_reasons
+    output["practical_zero_warmup_design_found"] = output["zero_warmup_design_found"] & output["practical_candidate"]
+    return output
+
+
 def evaluate_supply_temperature_sweep(
     config: dict,
     load_result: object,
@@ -754,11 +785,15 @@ def evaluate_passive_zero_warmup_search(
         ["scenario_name", "target_distance_m", "minimum_supplemental_warmup_kw", "best_design_pump_power_kw", "screening_score"],
         ascending=[True, True, True, True, False],
     ).reset_index(drop=True)
+    frame = _apply_practical_passive_filters(config, frame)
 
     selected_by_scenario: dict[str, dict[float, dict[str, object] | None]] = {}
+    practical_selected_by_scenario: dict[str, dict[float, dict[str, object] | None]] = {}
     for scenario_name in sorted(frame["scenario_name"].dropna().unique()):
         selected_by_scenario[scenario_name] = {}
+        practical_selected_by_scenario[scenario_name] = {}
         scenario_rows = frame[(frame["scenario_name"] == scenario_name) & (frame["status"] == "feasible")].copy()
+        practical_rows = scenario_rows[scenario_rows["practical_candidate"]].copy()
         for target_distance_m in target_distances_m:
             distance_rows = scenario_rows[(scenario_rows["target_distance_m"] - target_distance_m).abs() < 1e-6].copy()
             zero_rows = distance_rows[distance_rows["zero_warmup_design_found"]].sort_values(
@@ -773,8 +808,24 @@ def evaluate_passive_zero_warmup_search(
                 "warmup_free": zero_rows.iloc[0].to_dict() if not zero_rows.empty else None,
                 "near_best": near_best.iloc[0].to_dict() if not near_best.empty else None,
             }
+            practical_distance_rows = practical_rows[(practical_rows["target_distance_m"] - target_distance_m).abs() < 1e-6].copy()
+            practical_zero_rows = practical_distance_rows[
+                practical_distance_rows["practical_zero_warmup_design_found"]
+            ].sort_values(
+                ["best_design_pump_power_kw", "minimum_supplemental_warmup_kw", "screening_score"],
+                ascending=[True, True, False],
+            )
+            practical_near_best = practical_distance_rows.sort_values(
+                ["minimum_supplemental_warmup_kw", "best_design_pump_power_kw", "screening_score"],
+                ascending=[True, True, False],
+            )
+            practical_selected_by_scenario[scenario_name][target_distance_m] = {
+                "warmup_free": practical_zero_rows.iloc[0].to_dict() if not practical_zero_rows.empty else None,
+                "near_best": practical_near_best.iloc[0].to_dict() if not practical_near_best.empty else None,
+            }
 
     return {
         "table": frame,
         "selected_by_scenario": selected_by_scenario,
+        "practical_selected_by_scenario": practical_selected_by_scenario,
     }

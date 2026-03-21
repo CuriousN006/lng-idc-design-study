@@ -148,6 +148,10 @@ class SmokeTest(unittest.TestCase):
         self.assertFalse(passive_search["table"].empty)
         self.assertIn("baseline_air", passive_search["selected_by_scenario"])
         self.assertIn("warm_buried_pipe", passive_search["selected_by_scenario"])
+        base_distance = float(self.config["assignment"]["pipeline_distance_m"])
+        self.assertIsNone(
+            passive_search["practical_selected_by_scenario"]["baseline_air"][base_distance]["warmup_free"]
+        )
 
     def test_parallel_consistency(self) -> None:
         load_result = compute_load_model(self.config)
