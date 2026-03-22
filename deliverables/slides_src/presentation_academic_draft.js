@@ -104,6 +104,8 @@ const supplyRows = readCsv("supply_temperature_sweep.csv");
 const annualRows = readCsv("annual_summary.csv");
 const alternativeRows = readCsv("alternative_designs.csv");
 const auxiliaryHeatRows = readCsv("auxiliary_heat_sources.csv");
+const transportRows = readCsv("lng_transport_sensitivity.csv");
+const idcGranularityRows = readCsv("idc_secondary_granularity.csv");
 const passiveHeatRows = readCsv("passive_zero_warmup_search.csv");
 
 const baseDistance = distanceRows[0];
@@ -148,6 +150,20 @@ const topAlternatives = [
 const bestAuxiliary = auxiliaryHeatRows
   .slice()
   .sort((left, right) => toNumber(right.net_power_saving_kw) - toNumber(left.net_power_saving_kw))[0];
+const bestFinancialAuxiliary = auxiliaryHeatRows
+  .slice()
+  .sort((left, right) => toNumber(right.npv_krw) - toNumber(left.npv_krw))[0];
+const feasibleTransportRows = transportRows.filter((row) => row.status === "feasible");
+const transportReference = feasibleTransportRows.find((row) => toBool(row.is_reference)) || feasibleTransportRows[0];
+const transportAreaMinDeltaPct = feasibleTransportRows.length
+  ? Math.min(...feasibleTransportRows.map((row) => toNumber(row.required_area_m2_delta_pct)))
+  : NaN;
+const transportAreaMaxDeltaPct = feasibleTransportRows.length
+  ? Math.max(...feasibleTransportRows.map((row) => toNumber(row.required_area_m2_delta_pct)))
+  : NaN;
+const conservativeNetwork = idcGranularityRows
+  .slice()
+  .sort((left, right) => toNumber(right.pump_power_kw) - toNumber(left.pump_power_kw))[0];
 const practicalPassiveRows = passiveHeatRows.filter((row) => toBool(row.practical_zero_warmup_design_found));
 
 function addBackground(slide) {
@@ -740,7 +756,7 @@ function buildDeck() {
     addMetricBox(slide, 9.65, 3.05, 2.65, 1.0, "Core CAPEX", formatNumber(toNumber(summary["Core installed CAPEX"].value) / 1_000_000_000.0, 2), "십억원", colors.red);
     addSoftBox(slide, 6.75, 4.5, 5.55, 1.15, "해석 범위", [
       `현재 core-system NPV는 ${formatNumber(toNumber(summary["Core-system NPV"].value) / 1_000_000_000.0, 2)} 십억원으로, 장거리 외부 배관 CAPEX가 매우 크게 작용한다.`,
-      "하이브리드 보조 열원은 별도 시나리오 테이블로 해석하고, 추가 CAPEX는 아직 보수적으로 제외했다.",
+      `보조 열원까지 포함한 재무 최선 시나리오는 ${bestFinancialAuxiliary.scenario_label}이며 NPV는 ${formatNumber(toNumber(bestFinancialAuxiliary.npv_krw) / 1_000_000_000.0, 2)} 십억원이다.`,
     ]);
     addFooterNote(slide, "현재 버전은 core-system CAPEX와 단순 O&M/금융비용까지 포함");
     finalizeSlide(slide);
@@ -756,6 +772,9 @@ function buildDeck() {
       "3) 장거리 조건에서의 제어 전략",
       "",
       "이번 코드 v2는 혼합 LNG surrogate와 IDC 2차 루프 등가 유압모델까지 포함한다.",
+      transportReference
+        ? `Transport proxy를 바꾸면 기화기 면적이 ${formatNumber(transportAreaMinDeltaPct, 2)}%~${formatNumber(transportAreaMaxDeltaPct, 2)}% 흔들린다.`
+        : "혼합 LNG transport proxy 민감도는 비교 가능한 범위 안에서만 해석했다.",
     ]);
     addSoftBox(slide, 4.82, 1.45, 3.8, 4.95, "35 km를 정말 목표로 할 경우", [
       longDistanceBaseDutyMeetsLoad ? "현재 기본안으로도 35 km가 기본 LNG duty 경계 안에서 성립한다." : longDistanceHybridSatisfied ? "현재 35 km는 하이브리드 성립이지만 기본 LNG duty는 부족하다." : "공급온도 수준 조정",
@@ -768,6 +787,7 @@ function buildDeck() {
     addSoftBox(slide, 8.82, 1.45, 3.68, 4.95, "발표에서 말하면 좋은 점", [
       "안 되는 조건도 설계 결론이다.",
       "이번 재구축은 계산 자동화와 민감도 분석까지 연결한다.",
+      `IDC 2차 루프는 보수적 네트워크에서 펌프동력이 ${formatNumber(toNumber(conservativeNetwork.pump_power_kw), 1)} kW까지 증가할 수 있다.`,
       "따라서 이후 보고서 수정이나 조건 변경에 바로 대응할 수 있다.",
     ]);
     addFooterNote(slide, "A11의 ‘추가 고려 사항’ 파트를 현재 코드 기반으로 이어받음");

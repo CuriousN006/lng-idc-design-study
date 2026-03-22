@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .auxiliary_heat import evaluate_auxiliary_heat_sources
+from .auxiliary_heat import add_auxiliary_economics, evaluate_auxiliary_heat_sources
 from .capex import estimate_capex
 from .economics import compute_annual_metrics, compute_financial_metrics
 
@@ -42,12 +42,21 @@ def evaluate_system(
         core_system_power_kw,
     )
     capex = estimate_capex(config, idc_hx_result, hx_result, pipeline_result, idc_secondary_loop_result)
+    auxiliary_heat_sources = add_auxiliary_economics(config, auxiliary_heat_sources, capex["total_capex_krw"])
     financial_core = compute_financial_metrics(config, capex["total_capex_krw"], annual_metrics["cost_saving_krw_per_year"])
     best_hybrid = auxiliary_heat_sources["selected"]
-    financial_best_hybrid = compute_financial_metrics(
-        config,
-        capex["total_capex_krw"],
-        float(best_hybrid["annual_cost_saving_krw_per_year"]) if best_hybrid is not None else annual_metrics["cost_saving_krw_per_year"],
+    best_financial_hybrid = auxiliary_heat_sources["selected_financial"]
+    financial_best_hybrid = (
+        {
+            "annual_om_cost_krw_per_year": float(best_financial_hybrid["total_annual_om_cost_krw"]),
+            "net_annual_cashflow_krw_per_year": float(best_financial_hybrid["annual_cost_saving_krw_per_year"]) - float(best_financial_hybrid["total_annual_om_cost_krw"]),
+            "simple_payback_years": float(best_financial_hybrid["simple_payback_years"]),
+            "discounted_payback_years": float(best_financial_hybrid["discounted_payback_years"]),
+            "npv_krw": float(best_financial_hybrid["npv_krw"]),
+            "irr_fraction": float(best_financial_hybrid["irr_fraction"]),
+        }
+        if best_financial_hybrid is not None
+        else compute_financial_metrics(config, capex["total_capex_krw"], annual_metrics["cost_saving_krw_per_year"])
     )
 
     rows = [
@@ -73,10 +82,28 @@ def evaluate_system(
                 "source_ids": "ASM-043,ASM-044,ASM-045,ASM-046",
             },
             {
+                "metric": "Best-financial hybrid auxiliary source",
+                "value": auxiliary_heat_sources["selected_financial"]["scenario_label"] if auxiliary_heat_sources["selected_financial"] else "-",
+                "unit": "-",
+                "source_ids": "ASM-043,ASM-044,ASM-045,ASM-046,ASM-070,ASM-071,ASM-072,ASM-073,ASM-074,ASM-075,ASM-076,ASM-077",
+            },
+            {
                 "metric": "Best-case hybrid total power",
                 "value": auxiliary_heat_sources["selected"]["total_system_power_kw"] if auxiliary_heat_sources["selected"] else core_system_power_kw,
                 "unit": "kW",
                 "source_ids": "SRC-001,SRC-013,ASM-032,ASM-043,ASM-044,ASM-045,ASM-046,ASM-061,ASM-062,ASM-063,ASM-064,ASM-065",
+            },
+            {
+                "metric": "Best-case hybrid installed CAPEX",
+                "value": auxiliary_heat_sources["selected"]["total_installed_capex_krw"] if auxiliary_heat_sources["selected"] else capex["total_capex_krw"],
+                "unit": "KRW",
+                "source_ids": "SRC-021,SRC-022,SRC-023,SRC-024,SRC-025,ASM-057,ASM-058,ASM-059,ASM-060,ASM-070,ASM-071,ASM-072,ASM-073",
+            },
+            {
+                "metric": "Best-financial hybrid NPV",
+                "value": auxiliary_heat_sources["selected_financial"]["npv_krw"] if auxiliary_heat_sources["selected_financial"] else financial_core["npv_krw"],
+                "unit": "KRW",
+                "source_ids": "SRC-013,ASM-066,ASM-067,ASM-068,SRC-021,SRC-022,SRC-023,SRC-024,SRC-025,ASM-057,ASM-058,ASM-059,ASM-060,ASM-070,ASM-071,ASM-072,ASM-073,ASM-074,ASM-075,ASM-076,ASM-077",
             },
             {"metric": "Available cooling at IDC", "value": available_to_idc_kw, "unit": "kW", "source_ids": "SRC-001,SRC-005,ASM-014,ASM-015,ASM-016,ASM-035"},
             {"metric": "LNG system pump power", "value": lng_loop_pump_kw, "unit": "kW", "source_ids": "SRC-001,ASM-014,ASM-015,ASM-016"},
@@ -128,6 +155,7 @@ def evaluate_system(
         "capex": capex,
         "financial_core": financial_core,
         "financial_best_hybrid": financial_best_hybrid,
+        "best_financial_hybrid": best_financial_hybrid,
         "core_system_power_kw": core_system_power_kw,
         "lng_loop_pump_kw": lng_loop_pump_kw,
         "idc_secondary_pump_kw": idc_secondary_pump_kw,

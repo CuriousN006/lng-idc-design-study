@@ -108,14 +108,24 @@ def _irr(cashflows: list[float]) -> float:
     return 0.5 * (low + high)
 
 
-def compute_financial_metrics(config: dict, total_capex_krw: float, annual_cost_saving_krw: float) -> dict[str, float]:
+def compute_financial_metrics(
+    config: dict,
+    total_capex_krw: float,
+    annual_cost_saving_krw: float,
+    *,
+    annual_om_cost_krw_override: float | None = None,
+) -> dict[str, float]:
     financial = config["economic_inputs"]["financial"]
     project_life_years = int(financial["project_life_years"])
     discount_rate_fraction = float(financial["discount_rate_fraction"])
     annual_om_fraction_of_capex = float(financial["annual_om_fraction_of_capex"])
     salvage_fraction_of_capex = float(financial["salvage_fraction_of_capex"])
 
-    annual_om_cost_krw = total_capex_krw * annual_om_fraction_of_capex
+    annual_om_cost_krw = (
+        float(annual_om_cost_krw_override)
+        if annual_om_cost_krw_override is not None
+        else total_capex_krw * annual_om_fraction_of_capex
+    )
     net_annual_cashflow_krw = annual_cost_saving_krw - annual_om_cost_krw
     cashflows = [-total_capex_krw] + [net_annual_cashflow_krw] * project_life_years
     cashflows[-1] += total_capex_krw * salvage_fraction_of_capex

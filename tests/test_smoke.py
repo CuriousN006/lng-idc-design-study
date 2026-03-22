@@ -15,7 +15,9 @@ from lng_dc_design.fluid_screening import compute_fluid_screening
 from lng_dc_design.hx_lng_vaporizer import design_lng_vaporizer
 from lng_dc_design.idc_hx import evaluate_idc_heat_exchange
 from lng_dc_design.idc_secondary_loop import evaluate_idc_secondary_loop
+from lng_dc_design.idc_secondary_sensitivity import evaluate_idc_secondary_loop_granularity
 from lng_dc_design.load_model import compute_load_model
+from lng_dc_design.mixture_transport_sensitivity import evaluate_lng_transport_sensitivity
 from lng_dc_design.parallel import resolve_parallel_options
 from lng_dc_design.pipeline_loop import design_pipeline
 from lng_dc_design.scenario_study import (
@@ -60,6 +62,11 @@ class SmokeTest(unittest.TestCase):
         supply_temperature_sweep = evaluate_supply_temperature_sweep(self.config, load_result, baseline)
         ambient_closure_map = evaluate_ambient_closure_map(self.config, load_result, baseline)
         zero_warmup_target_search = evaluate_zero_warmup_target_search(self.config, load_result, baseline)
+        lng_transport_sensitivity = evaluate_lng_transport_sensitivity(self.config, screening, pipeline_result)
+        idc_granularity = evaluate_idc_secondary_loop_granularity(
+            self.config,
+            idc_hx_result["chilled_water_mass_flow_kg_s"],
+        )
         system_eval = evaluate_system(
             self.config,
             load_result,
@@ -145,9 +152,20 @@ class SmokeTest(unittest.TestCase):
         self.assertIsNone(long_search["warmup_free"])
         self.assertIsNotNone(long_search["near_best"])
         self.assertGreater(float(long_search["near_best"]["minimum_supplemental_warmup_kw"]), 0.0)
+        self.assertFalse(lng_transport_sensitivity["table"].empty)
+        self.assertIsNotNone(lng_transport_sensitivity["reference"])
+        self.assertIn("feasible", set(lng_transport_sensitivity["table"]["status"].tolist()))
+        self.assertFalse(idc_granularity["table"].empty)
+        self.assertIsNotNone(idc_granularity["selected_conservative"])
+        self.assertGreaterEqual(
+            float(idc_granularity["selected_conservative"]["pump_power_kw"]),
+            float(idc_granularity["base_selected"]["pump_power_kw"]),
+        )
         self.assertGreater(system_eval["annual"]["cost_saving_krw_per_year"], 0.0)
         self.assertFalse(system_eval["auxiliary_heat_sources"]["table"].empty)
         self.assertIsNotNone(system_eval["auxiliary_heat_sources"]["selected"])
+        self.assertIsNotNone(system_eval["auxiliary_heat_sources"]["selected_financial"])
+        self.assertIn("total_installed_capex_krw", system_eval["auxiliary_heat_sources"]["selected"])
         self.assertGreater(float(system_eval["capex"]["total_capex_krw"]), 0.0)
 
     def test_build_deliverables(self) -> None:
@@ -161,6 +179,11 @@ class SmokeTest(unittest.TestCase):
         self.assertNotIn("Baseline compressor power vs LNG loop pump power only", report_text)
         self.assertIn("하이브리드 성립, 기본 LNG duty 불성립", report_text)
         self.assertIn("하이브리드 성립, 기본 LNG duty 불성립", script_text)
+        self.assertIn("혼합 LNG transport proxy 민감도", report_text)
+        self.assertIn("IDC 2차 루프 등가망 민감도", report_text)
+        self.assertIn("보조 열원까지 포함한 재무 최선", script_text)
+        self.assertTrue((self.project_root / "output" / "lng_transport_sensitivity.csv").exists())
+        self.assertTrue((self.project_root / "output" / "idc_secondary_granularity.csv").exists())
 
     def test_pipeline_thermal_case_extensions(self) -> None:
         load_result = compute_load_model(self.config)

@@ -10,7 +10,9 @@ from .fluid_screening import compute_fluid_screening
 from .hx_lng_vaporizer import design_lng_vaporizer
 from .idc_hx import evaluate_idc_heat_exchange
 from .idc_secondary_loop import evaluate_idc_secondary_loop
+from .idc_secondary_sensitivity import evaluate_idc_secondary_loop_granularity
 from .legacy_compare import compare_with_legacy_excel
+from .mixture_transport_sensitivity import evaluate_lng_transport_sensitivity
 from .load_model import compute_load_model
 from .parallel import default_parallel_enabled_for_command, resolve_parallel_options
 from .pipeline_loop import design_pipeline
@@ -55,6 +57,8 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
     supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline, parallel_options=parallel_options)
     ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
     zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
+    lng_transport_sensitivity = evaluate_lng_transport_sensitivity(values, screening, pipeline_result)
+    idc_secondary_granularity = evaluate_idc_secondary_loop_granularity(values, idc_hx_result["chilled_water_mass_flow_kg_s"])
     system_eval = evaluate_system(
         values,
         load_result,
@@ -96,6 +100,8 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         supply_temperature_sweep,
         ambient_closure_map,
         zero_warmup_target_search,
+        lng_transport_sensitivity,
+        idc_secondary_granularity,
         system_eval,
         validation_messages,
         legacy_result,
@@ -115,6 +121,8 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         "supply_temperature_sweep": supply_temperature_sweep,
         "ambient_closure_map": ambient_closure_map,
         "zero_warmup_target_search": zero_warmup_target_search,
+        "lng_transport_sensitivity": lng_transport_sensitivity,
+        "idc_secondary_granularity": idc_secondary_granularity,
         "system": system_eval,
         "validation": validation_messages,
     }
@@ -122,7 +130,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="LNG cold-energy IDC design toolkit")
-    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "analyze-aux-heat", "scenario-study", "explore-passive-heat", "uncertainty-study", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
+    parser.add_argument("command", choices=["run-all", "screen-fluids", "design-hx", "analyze-pipeline", "analyze-aux-heat", "scenario-study", "explore-passive-heat", "uncertainty-study", "analyze-lng-proxy", "analyze-idc-network", "build-report", "build-slides", "build-deliverables", "compare-legacy", "validate"])
     parser.add_argument("--config", required=True, help="Path to TOML configuration file")
     parser.add_argument("--workers", type=int, default=None, help="Override process worker count for parallel commands")
     parser.add_argument("--serial", action="store_true", help="Force serial execution even for commands that default to parallel mode")
@@ -172,6 +180,20 @@ def main() -> int:
         print(results["system"]["auxiliary_heat_sources"]["table"].to_string(index=False))
         return 0
 
+    if args.command == "analyze-lng-proxy":
+        screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
+        pipeline_result = design_pipeline(values, screening["selected"], load_result.total_kw)
+        result = evaluate_lng_transport_sensitivity(values, screening, pipeline_result)
+        print(result["table"].to_string(index=False))
+        return 0
+
+    if args.command == "analyze-idc-network":
+        screening = compute_fluid_screening(values, load_result.total_kw, parallel_options=parallel_options)
+        idc_hx_result = evaluate_idc_heat_exchange(values, screening["selected"]["coolprop_name"], load_result.total_kw)
+        result = evaluate_idc_secondary_loop_granularity(values, idc_hx_result["chilled_water_mass_flow_kg_s"])
+        print(result["table"].to_string(index=False))
+        return 0
+
     if args.command == "scenario-study":
         minimum_power = compute_theoretical_minimum_power(values, load_result.total_kw)
         baseline = compute_baseline_cycle(values, load_result.total_kw)
@@ -189,6 +211,8 @@ def main() -> int:
         supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline, parallel_options=parallel_options)
         ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
         zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
+        lng_transport_sensitivity = evaluate_lng_transport_sensitivity(values, screening, pipeline_result)
+        idc_secondary_granularity = evaluate_idc_secondary_loop_granularity(values, idc_hx_result["chilled_water_mass_flow_kg_s"])
         print(distance_scenarios.to_string(index=False))
         print()
         print(idc_secondary_loop_result["scan_table"].to_string(index=False))
@@ -198,6 +222,10 @@ def main() -> int:
         print(ambient_closure_map["table"].to_string(index=False))
         print()
         print(zero_warmup_target_search["table"].to_string(index=False))
+        print()
+        print(lng_transport_sensitivity["table"].to_string(index=False))
+        print()
+        print(idc_secondary_granularity["table"].to_string(index=False))
         print()
         print(scenario_result["alternatives"].to_string(index=False))
         return 0

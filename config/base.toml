@@ -242,6 +242,42 @@ source_id = "ASM-065"
 value = 250.0
 source_id = "ASM-065"
 
+[[idc_secondary_loop_granularity.scenarios]]
+name = "compact_equivalent"
+label = "Compact equivalent network"
+parallel_circuits = 4
+horizontal_distribution_length_factor = 1.10
+minor_loss_multiplier = 0.90
+terminal_pressure_drop_multiplier = 0.95
+additional_header_pressure_drop_kpa = 0.0
+
+[[idc_secondary_loop_granularity.scenarios]]
+name = "baseline_equivalent"
+label = "Baseline equivalent network"
+parallel_circuits = 4
+horizontal_distribution_length_factor = 1.40
+minor_loss_multiplier = 1.00
+terminal_pressure_drop_multiplier = 1.00
+additional_header_pressure_drop_kpa = 0.0
+
+[[idc_secondary_loop_granularity.scenarios]]
+name = "conservative_network"
+label = "Conservative header-rich network"
+parallel_circuits = 4
+horizontal_distribution_length_factor = 1.75
+minor_loss_multiplier = 1.15
+terminal_pressure_drop_multiplier = 1.10
+additional_header_pressure_drop_kpa = 20.0
+
+[[idc_secondary_loop_granularity.scenarios]]
+name = "redundant_shorter_branches"
+label = "Redundant multi-circuit network"
+parallel_circuits = 6
+horizontal_distribution_length_factor = 1.30
+minor_loss_multiplier = 1.05
+terminal_pressure_drop_multiplier = 1.05
+additional_header_pressure_drop_kpa = 15.0
+
 [lng_mixture.backend]
 value = "HEOS"
 source_id = "SRC-020"
@@ -253,6 +289,10 @@ source_id = "ASM-055"
 [lng_mixture.transport_property_proxy]
 value = "Methane"
 source_id = "ASM-069"
+
+[lng_transport_sensitivity.proxy_options]
+value = ["Methane", "Ethane", "Propane", "configured_mixture"]
+source_id = "ASM-078"
 
 [lng_mixture.component_mole_percent.Methane]
 value = 95.3
@@ -518,6 +558,18 @@ source_id = "ASM-043"
 value = 0.0
 source_id = "ASM-043"
 
+[auxiliary_heat_sources.electric_resistance_heater.capex_fixed_krw]
+value = 100000000.0
+source_id = "ASM-070"
+
+[auxiliary_heat_sources.electric_resistance_heater.capex_variable_krw_per_kwth]
+value = 70000.0
+source_id = "ASM-070"
+
+[auxiliary_heat_sources.electric_resistance_heater.annual_om_fraction_of_aux_capex]
+value = 0.01
+source_id = "ASM-074"
+
 [auxiliary_heat_sources.ambient_air_trim_heater]
 label = "Ambient-air trim heater"
 description = "Low-grade ambient heat source with only fan and circulation parasitics counted electrically."
@@ -529,6 +581,18 @@ source_id = "ASM-044"
 [auxiliary_heat_sources.ambient_air_trim_heater.fixed_parasitic_kw]
 value = 15.0
 source_id = "ASM-044"
+
+[auxiliary_heat_sources.ambient_air_trim_heater.capex_fixed_krw]
+value = 400000000.0
+source_id = "ASM-071"
+
+[auxiliary_heat_sources.ambient_air_trim_heater.capex_variable_krw_per_kwth]
+value = 160000.0
+source_id = "ASM-071"
+
+[auxiliary_heat_sources.ambient_air_trim_heater.annual_om_fraction_of_aux_capex]
+value = 0.02
+source_id = "ASM-075"
 
 [auxiliary_heat_sources.waste_heat_recovery_loop]
 label = "Waste-heat recovery loop"
@@ -542,6 +606,18 @@ source_id = "ASM-045"
 value = 10.0
 source_id = "ASM-045"
 
+[auxiliary_heat_sources.waste_heat_recovery_loop.capex_fixed_krw]
+value = 600000000.0
+source_id = "ASM-072"
+
+[auxiliary_heat_sources.waste_heat_recovery_loop.capex_variable_krw_per_kwth]
+value = 220000.0
+source_id = "ASM-072"
+
+[auxiliary_heat_sources.waste_heat_recovery_loop.annual_om_fraction_of_aux_capex]
+value = 0.025
+source_id = "ASM-076"
+
 [auxiliary_heat_sources.heat_pump_booster]
 label = "Heat-pump booster"
 description = "Active booster using low-grade heat with effective electrical use approximated from COP."
@@ -553,6 +629,18 @@ source_id = "ASM-046"
 [auxiliary_heat_sources.heat_pump_booster.fixed_parasitic_kw]
 value = 20.0
 source_id = "ASM-046"
+
+[auxiliary_heat_sources.heat_pump_booster.capex_fixed_krw]
+value = 800000000.0
+source_id = "ASM-073"
+
+[auxiliary_heat_sources.heat_pump_booster.capex_variable_krw_per_kwth]
+value = 650000.0
+source_id = "ASM-073"
+
+[auxiliary_heat_sources.heat_pump_booster.annual_om_fraction_of_aux_capex]
+value = 0.035
+source_id = "ASM-077"
 
 [coolant_candidates.R170]
 display_name = "R-170 (Ethane)"

@@ -499,7 +499,25 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         "",
         str(ctx["auxiliary_heat_text"]),
         "",
-        "### 4.8 기존 엑셀 결과와 비교",
+        "![하이브리드 보조 열원 경제성](../output/figures/auxiliary_hybrid_economics.png)",
+        "",
+        "### 4.8 혼합 LNG transport proxy 민감도",
+        "",
+        str(ctx["transport_sensitivity_md"]),
+        "",
+        str(ctx["transport_sensitivity_text"]),
+        "",
+        "![혼합 LNG transport proxy 민감도](../output/figures/lng_transport_sensitivity.png)",
+        "",
+        "### 4.9 IDC 2차 루프 등가망 민감도",
+        "",
+        str(ctx["idc_granularity_md"]),
+        "",
+        str(ctx["idc_granularity_text"]),
+        "",
+        "![IDC 2차 루프 등가망 민감도](../output/figures/idc_secondary_granularity.png)",
+        "",
+        "### 4.10 기존 엑셀 결과와 비교",
         "",
         str(ctx["legacy_md"]),
         "",
@@ -532,12 +550,16 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         "",
         (ctx["auxiliary_heat_text"]),
         "",
+        (ctx["transport_discussion_text"]),
+        "",
+        (ctx["granularity_discussion_text"]),
+        "",
         "## 6. 한계와 향후 확장",
         "",
-        "- LNG 엔탈피 계산은 혼합 LNG surrogate를 쓰지만, 극저온 transport property는 메탄 proxy를 사용했다.",
-        "- IDC 2차 루프는 등가 배관망과 lumped terminal loss로 모델링했으므로 floor-by-floor 배관 상세도는 아직 없다.",
+        "- LNG 엔탈피 계산은 혼합 LNG surrogate를 쓰고, transport property는 proxy 민감도까지 확인했지만 실제 혼합물 transport property 검증은 아직 남아 있다.",
+        "- IDC 2차 루프는 등가 배관망과 granularity sensitivity까지 포함했지만, floor-by-floor 배관 상세도와 실제 제어전략은 아직 없다.",
         "- 기화기 설계는 열역학과 형상 스캔 중심이며, 응력과 제작성의 상세 검토는 아직 별도 단계가 필요하다.",
-        "- 경제성은 core-system CAPEX와 단순 O&M까지 확장했지만, 보조 열원별 추가 CAPEX와 site-specific 공사비는 아직 별도 단계가 필요하다.",
+        "- 경제성은 core-system CAPEX와 보조 열원별 추가 CAPEX/O&M까지 확장했지만, site-specific 토목비와 LNG 터미널 연계비는 아직 별도 단계가 필요하다.",
         "- 냉각유체 스코어는 휴리스틱 성격이 있으므로, 안전/규제/재료 호환성 검토로 후속 보정이 필요하다.",
         "",
         "## 7. 결론",
@@ -576,6 +598,8 @@ def build_report(project_root: Path) -> Path:
     ambient_closure = pd.read_csv(output_dir / "ambient_closure_map.csv")
     annual = pd.read_csv(output_dir / "annual_summary.csv")
     auxiliary_heat = pd.read_csv(output_dir / "auxiliary_heat_sources.csv")
+    transport_sensitivity = pd.read_csv(output_dir / "lng_transport_sensitivity.csv")
+    idc_granularity = pd.read_csv(output_dir / "idc_secondary_granularity.csv")
     payback = pd.read_csv(output_dir / "payback_allowable_capex.csv")
     legacy = pd.read_csv(output_dir / "legacy_comparison.csv")
     hx_segments = pd.read_csv(output_dir / "hx_segments.csv")
@@ -606,7 +630,25 @@ def build_report(project_root: Path) -> Path:
         (temperature["status"] == "feasible") & (temperature["long_distance_base_duty_meets_load"] == True)
     ].sort_values("pump_power_kw")
     best_auxiliary = auxiliary_heat.sort_values("net_power_saving_kw", ascending=False).iloc[0]
+    best_financial_auxiliary = auxiliary_heat.sort_values(
+        ["npv_krw", "annual_cost_saving_krw_per_year"],
+        ascending=[False, False],
+    ).iloc[0]
     practical_passive = passive_zero_warmup[passive_zero_warmup["practical_zero_warmup_design_found"] == True].copy()
+    feasible_transport = transport_sensitivity[transport_sensitivity["status"] == "feasible"].copy()
+    transport_reference_rows = feasible_transport[feasible_transport["is_reference"] == True]
+    transport_reference = transport_reference_rows.iloc[0] if not transport_reference_rows.empty else None
+    transport_best = (
+        feasible_transport.sort_values(
+            ["required_area_m2", "tube_pressure_drop_kpa", "shell_pressure_drop_kpa"],
+            ascending=[True, True, True],
+        ).iloc[0]
+        if not feasible_transport.empty
+        else None
+    )
+    granularity_base_rows = idc_granularity[idc_granularity["scenario_name"] == "baseline_equivalent"]
+    granularity_base = granularity_base_rows.iloc[0] if not granularity_base_rows.empty else idc_granularity.iloc[0]
+    granularity_conservative = idc_granularity.sort_values("pump_power_kw", ascending=False).iloc[0]
 
     annual_report = annual.copy()
     annual_report["항목"] = annual_report["metric"].replace(
@@ -767,6 +809,33 @@ def build_report(project_root: Path) -> Path:
     closure_md = _markdown_table(
         closure_table,
         ["공급온도 (°C)", "유체", "기본안 추가 warm-up (kW)", "무보조 성립거리 (km)", "35 km 무보조 성립", "기본 스크리닝 선정"],
+    )
+    transport_sensitivity_md = _markdown_table(
+        pd.DataFrame(
+            {
+                "Proxy": transport_sensitivity["proxy_label"],
+                "상태": transport_sensitivity["status"].replace({"feasible": "성립", "failed": "실패"}),
+                "요구 면적 (m2)": transport_sensitivity["required_area_m2"].map(_format_number),
+                "면적 변화율 (%)": transport_sensitivity["required_area_m2_delta_pct"].map(lambda x: _format_number(x, 2)),
+                "Tube DP (kPa)": transport_sensitivity["tube_pressure_drop_kpa"].map(_format_number),
+                "Shell DP (kPa)": transport_sensitivity["shell_pressure_drop_kpa"].map(_format_number),
+                "기준 Proxy": transport_sensitivity["is_reference"].map(lambda x: "예" if bool(x) else "아니오"),
+            }
+        ),
+        ["Proxy", "상태", "요구 면적 (m2)", "면적 변화율 (%)", "Tube DP (kPa)", "Shell DP (kPa)", "기준 Proxy"],
+    )
+    idc_granularity_md = _markdown_table(
+        pd.DataFrame(
+            {
+                "시나리오": idc_granularity["scenario_label"],
+                "병렬 회로 수": idc_granularity["parallel_circuits"].map(lambda x: _format_number(x, 0)),
+                "등가 길이 계수": idc_granularity["horizontal_distribution_length_factor"].map(lambda x: _format_number(x, 2)),
+                "총 압력강하 (kPa)": idc_granularity["total_pressure_drop_kpa"].map(_format_number),
+                "펌프동력 (kW)": idc_granularity["pump_power_kw"].map(_format_number),
+                "기본안 대비 변화율 (%)": idc_granularity["pump_power_delta_pct_vs_base"].map(lambda x: _format_number(x, 2)),
+            }
+        ),
+        ["시나리오", "병렬 회로 수", "등가 길이 계수", "총 압력강하 (kPa)", "펌프동력 (kW)", "기본안 대비 변화율 (%)"],
     )
     annual_md = _markdown_table(annual_report, ["항목", "값", "단위"])
     payback_md = _markdown_table(
@@ -936,11 +1005,57 @@ def build_report(project_root: Path) -> Path:
             "조합은 무보조 성립점으로 남았다. 따라서 향후에는 이 practical warm-up-free 해를 중심으로 설계를 다시 좁혀볼 가치가 있다."
         )
 
-    auxiliary_heat_text = (
-        f"보조 열원이 완전히 사라지지 않는다면, 현재 구성된 하이브리드 시나리오 중에서는 "
-        f"**{best_auxiliary['scenario_label']}**가 가장 유리했다. 이 경우 총 시스템 동력은 "
-        f"**{_format_number(best_auxiliary['total_system_power_kw'])} kW**이고, 기준선 대비 순절감은 "
-        f"**{_format_number(best_auxiliary['net_power_saving_kw'])} kW**다."
+    if str(best_auxiliary["scenario_key"]) == str(best_financial_auxiliary["scenario_key"]):
+        auxiliary_heat_text = (
+            f"보조 열원이 완전히 사라지지 않는다면, 현재 구성된 하이브리드 시나리오 중에서는 "
+            f"**{best_auxiliary['scenario_label']}**가 전력 기준과 재무 기준 모두에서 가장 유리했다. "
+            f"이 경우 총 시스템 동력은 **{_format_number(best_auxiliary['total_system_power_kw'])} kW**, "
+            f"기준선 대비 순절감은 **{_format_number(best_auxiliary['net_power_saving_kw'])} kW**, "
+            f"총 설치비는 **{_format_number(best_auxiliary['total_installed_capex_krw'] / 1_000_000_000.0, 2)} 십억원**, "
+            f"NPV는 **{_format_number(best_auxiliary['npv_krw'] / 1_000_000_000.0, 2)} 십억원**이다."
+        )
+    else:
+        auxiliary_heat_text = (
+            f"보조 열원이 완전히 사라지지 않는다면, 전력 기준 최선 시나리오는 **{best_auxiliary['scenario_label']}**였고 "
+            f"총 시스템 동력은 **{_format_number(best_auxiliary['total_system_power_kw'])} kW**였다. "
+            f"반면 재무 기준 최선 시나리오는 **{best_financial_auxiliary['scenario_label']}**였으며, "
+            f"총 설치비 **{_format_number(best_financial_auxiliary['total_installed_capex_krw'] / 1_000_000_000.0, 2)} 십억원**, "
+            f"NPV **{_format_number(best_financial_auxiliary['npv_krw'] / 1_000_000_000.0, 2)} 십억원**으로 정리되었다."
+        )
+
+    if transport_reference is not None and transport_best is not None:
+        transport_sensitivity_text = (
+            f"기준 transport proxy는 **{transport_reference['proxy_label']}**였고, "
+            f"비교 가능한 proxy들 사이에서 요구 면적 변화는 "
+            f"**{_format_number(feasible_transport['required_area_m2_delta_pct'].min(), 2)}% ~ "
+            f"{_format_number(feasible_transport['required_area_m2_delta_pct'].max(), 2)}%**, "
+            f"tube-side 압력강하 변화는 **{_format_number(feasible_transport['tube_pressure_drop_kpa_delta_pct'].min(), 2)}% ~ "
+            f"{_format_number(feasible_transport['tube_pressure_drop_kpa_delta_pct'].max(), 2)}%** 범위였다. "
+            f"즉 현재 혼합 LNG 모델은 엔탈피는 일관되게 반영하되, transport proxy 선택이 기화기 상세 제원에는 유의미한 범위를 만든다."
+        )
+    else:
+        transport_sensitivity_text = (
+            "현재 설정에서는 혼합 LNG transport proxy 민감도 표를 생성했지만, 비교 가능한 기준 proxy가 충분히 확보되지 않았다."
+        )
+
+    granularity_span_kw = float(idc_granularity["pump_power_kw"].max()) - float(idc_granularity["pump_power_kw"].min())
+    idc_granularity_text = (
+        f"IDC 2차 루프를 등가 단일망으로 보지 않고 회로 수와 분배 길이 계수를 흔들어 보면, "
+        f"펌프동력은 **{_format_number(float(idc_granularity['pump_power_kw'].min()))} ~ "
+        f"{_format_number(float(idc_granularity['pump_power_kw'].max()))} kW** 범위로 움직였다. "
+        f"기본 등가망 시나리오(**{granularity_base['scenario_label']}**) 대비 가장 보수적인 시나리오 "
+        f"**{granularity_conservative['scenario_label']}**의 증가는 **{_format_number(granularity_conservative['pump_power_delta_pct_vs_base'], 2)}%**였다."
+    )
+
+    transport_discussion_text = (
+        "여섯째, 혼합 LNG surrogate는 이제 엔탈피뿐 아니라 transport proxy 민감도까지 함께 제시할 수 있게 되었다. "
+        "따라서 메탄 proxy 하나에만 결과를 걸지 않고, 기화기 면적과 압력강하가 어느 정도 범위에서 흔들리는지 설명할 수 있다."
+    )
+
+    granularity_discussion_text = (
+        f"일곱째, IDC 2차 루프는 현재 등가 배관망 근사이지만, granularity sensitivity를 추가하면서 "
+        f"적어도 pump power가 약 **{_format_number(granularity_span_kw)} kW** 폭 안에서 어떻게 움직이는지 보일 수 있게 되었다. "
+        "즉 현재 수치는 단일 숫자가 아니라 네트워크 표현 수준에 따른 범위를 가진다는 점을 명시하게 되었다."
     )
 
     ctx: dict[str, object] = {
@@ -950,6 +1065,8 @@ def build_report(project_root: Path) -> Path:
         "distance_md": distance_md,
         "temperature_md": temperature_md,
         "closure_md": closure_md,
+        "transport_sensitivity_md": transport_sensitivity_md,
+        "idc_granularity_md": idc_granularity_md,
         "annual_md": annual_md,
         "payback_md": payback_md,
         "legacy_md": legacy_md,
@@ -1031,6 +1148,10 @@ def build_report(project_root: Path) -> Path:
         "closure_interpretation_text": closure_interpretation_text,
         "practical_passive_text": practical_passive_text,
         "auxiliary_heat_text": auxiliary_heat_text,
+        "transport_sensitivity_text": transport_sensitivity_text,
+        "idc_granularity_text": idc_granularity_text,
+        "transport_discussion_text": transport_discussion_text,
+        "granularity_discussion_text": granularity_discussion_text,
     }
 
     report_path = deliverables_dir / "report_draft.md"
@@ -1055,6 +1176,8 @@ def build_presentation_script(project_root: Path) -> Path:
     temperature = pd.read_csv(output_dir / "supply_temperature_sweep.csv")
     annual = pd.read_csv(output_dir / "annual_summary.csv")
     auxiliary_heat = pd.read_csv(output_dir / "auxiliary_heat_sources.csv")
+    transport_sensitivity = pd.read_csv(output_dir / "lng_transport_sensitivity.csv")
+    idc_granularity = pd.read_csv(output_dir / "idc_secondary_granularity.csv")
     passive_zero_warmup = pd.read_csv(output_dir / "passive_zero_warmup_search.csv")
     selected_alternative = alternatives.iloc[0]
     base_distance = distance.sort_values("distance_km").iloc[0]
@@ -1067,7 +1190,12 @@ def build_presentation_script(project_root: Path) -> Path:
         (temperature["status"] == "feasible") & (temperature["long_distance_base_duty_meets_load"] == True)
     ].head(1)
     best_auxiliary = auxiliary_heat.sort_values("net_power_saving_kw", ascending=False).iloc[0]
+    best_financial_auxiliary = auxiliary_heat.sort_values(["npv_krw", "annual_cost_saving_krw_per_year"], ascending=[False, False]).iloc[0]
     practical_passive = passive_zero_warmup[passive_zero_warmup["practical_zero_warmup_design_found"] == True].copy()
+    feasible_transport = transport_sensitivity[transport_sensitivity["status"] == "feasible"].copy()
+    transport_reference_rows = feasible_transport[feasible_transport["is_reference"] == True]
+    transport_reference = transport_reference_rows.iloc[0] if not transport_reference_rows.empty else None
+    conservative_network = idc_granularity.sort_values("pump_power_kw", ascending=False).iloc[0]
     annual_map = {
         str(row["metric"]): {
             "value": float(row["value"]),
@@ -1146,9 +1274,18 @@ def build_presentation_script(project_root: Path) -> Path:
         f"- 연간 전력요금 절감은 {_format_number(annual_map['Electricity cost saving']['value'] / 1_000_000.0)} 백만원/년 수준이다.",
         f"- 연간 회피 간접배출은 {_format_number(annual_map['Avoided indirect emissions']['value'])} tCO2/년이다.",
         f"- 다만 core installed CAPEX는 {_format_number(float(summary['Core installed CAPEX']['value']) / 1_000_000_000.0, 2)} 십억원, NPV는 {_format_number(float(summary['Core-system NPV']['value']) / 1_000_000_000.0, 2)} 십억원으로 현재는 투자 부담이 크다고 덧붙인다.",
+        f"- 보조 열원까지 포함한 재무 최선 시나리오는 {best_financial_auxiliary['scenario_label']}이고, 해당 시나리오 NPV는 {_format_number(float(best_financial_auxiliary['npv_krw']) / 1_000_000_000.0, 2)} 십억원이다.",
         "",
         "## 슬라이드 17. 추가 고려 사항 - 확장 과제",
-        "- 혼합 LNG surrogate, IDC 2차 루프, 장거리 조건의 제어 전략과 보조 열원 CAPEX가 후속 과제라고 정리한다.",
+        "- 혼합 LNG surrogate 자체뿐 아니라 transport proxy 민감도와 IDC 2차 루프 granularity sensitivity까지 현재 버전에 포함했다고 정리한다.",
+        (
+            f"- 기준 proxy {transport_reference['proxy_label']} 대비 기화기 요구 면적 변화는 "
+            f"{_format_number(float(feasible_transport['required_area_m2_delta_pct'].min()), 2)}%에서 "
+            f"{_format_number(float(feasible_transport['required_area_m2_delta_pct'].max()), 2)}% 범위라고 설명한다."
+            if transport_reference is not None and not feasible_transport.empty
+            else "- 혼합 LNG transport proxy는 비교 가능한 범위 안에서만 민감도 해석을 수행했다고 설명한다."
+        ),
+        f"- IDC 2차 루프는 네트워크 보수화 시 펌프동력이 {_format_number(float(conservative_network['pump_power_kw']), 1)} kW까지 증가할 수 있다고 설명한다.",
         f"- 현재 기본안에서 {int(long_distance['distance_km'])} km 조건은 {'기본 LNG duty까지 이미 성립' if long_distance_base_ok else '하이브리드는 성립하지만 기본 LNG duty는 아직 불성립' if long_distance_hybrid_ok else '하이브리드까지 포함해 아직 불성립'}이라고 정리하고, 그 이유를 IDC 측 HX와 총 duty 관점에서 설명한다.",
         "",
         "## 슬라이드 18. 추가 고려 사항 - 출처 체계와 재현성",

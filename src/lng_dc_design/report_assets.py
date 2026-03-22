@@ -325,6 +325,54 @@ def _save_capex_breakdown(output_dir: Path, capex_table: pd.DataFrame) -> None:
     plt.close(fig)
 
 
+def _save_auxiliary_hybrid_economics(output_dir: Path, auxiliary_heat_sources: pd.DataFrame) -> None:
+    if auxiliary_heat_sources.empty:
+        return
+    ordered = auxiliary_heat_sources.sort_values("npv_krw", ascending=False)
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(ordered["scenario_label"], ordered["npv_krw"] / 1_000_000_000.0, color="#4f6d7a")
+    ax.axhline(0.0, color="#333333", linewidth=1.0, linestyle="--")
+    ax.set_ylabel("NPV (billion KRW)")
+    ax.set_title("Hybrid Auxiliary-Source Financial Comparison")
+    ax.tick_params(axis="x", rotation=20)
+    fig.tight_layout()
+    fig.savefig(output_dir / "auxiliary_hybrid_economics.png", dpi=180)
+    plt.close(fig)
+
+
+def _save_lng_transport_sensitivity(output_dir: Path, transport_sensitivity: pd.DataFrame) -> None:
+    feasible = transport_sensitivity[transport_sensitivity["status"] == "feasible"].copy()
+    if feasible.empty:
+        return
+    fig, ax1 = plt.subplots(figsize=(9, 5))
+    ax1.bar(feasible["proxy_label"], feasible["required_area_m2"], color="#2e6f95")
+    ax1.set_ylabel("Required area (m2)", color="#2e6f95")
+    ax1.tick_params(axis="y", labelcolor="#2e6f95")
+    ax1.tick_params(axis="x", rotation=20)
+
+    ax2 = ax1.twinx()
+    ax2.plot(feasible["proxy_label"], feasible["tube_pressure_drop_kpa"], marker="o", color="#8b1e3f")
+    ax2.set_ylabel("Tube-side pressure drop (kPa)", color="#8b1e3f")
+    ax2.tick_params(axis="y", labelcolor="#8b1e3f")
+    ax1.set_title("Mixed-LNG Transport Proxy Sensitivity")
+    fig.tight_layout()
+    fig.savefig(output_dir / "lng_transport_sensitivity.png", dpi=180)
+    plt.close(fig)
+
+
+def _save_idc_secondary_granularity(output_dir: Path, idc_granularity: pd.DataFrame) -> None:
+    if idc_granularity.empty:
+        return
+    fig, ax = plt.subplots(figsize=(9, 5))
+    ax.bar(idc_granularity["scenario_label"], idc_granularity["pump_power_kw"], color="#5c6b73")
+    ax.set_ylabel("Pump power (kW)")
+    ax.set_title("IDC Secondary-Loop Granularity Sensitivity")
+    ax.tick_params(axis="x", rotation=20)
+    fig.tight_layout()
+    fig.savefig(output_dir / "idc_secondary_granularity.png", dpi=180)
+    plt.close(fig)
+
+
 def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
     source_map = {row["metric"]: row["source_ids"] for _, row in system_eval["summary"].iterrows()}
     return pd.DataFrame(
@@ -386,6 +434,13 @@ def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
                 "source_ids": source_map["LNG stream model"],
             },
             {
+                "requirement": "Mixed-LNG transport proxy sensitivity",
+                "status": "Complete",
+                "evidence_metric": "LNG stream model",
+                "primary_output": "output/lng_transport_sensitivity.csv; output/figures/lng_transport_sensitivity.png",
+                "source_ids": source_map["LNG stream model"],
+            },
+            {
                 "requirement": "10 km coolant pipeline design",
                 "status": "Complete",
                 "evidence_metric": "LNG system pump power",
@@ -413,6 +468,13 @@ def _build_requirement_traceability(system_eval: dict) -> pd.DataFrame:
                 "primary_output": "output/capex_breakdown.csv; output/financial_summary.csv; output/figures/capex_breakdown.png",
                 "source_ids": source_map["Core-system NPV"],
             },
+            {
+                "requirement": "Hybrid auxiliary-source CAPEX and financial ranking",
+                "status": "Complete",
+                "evidence_metric": "Best-financial hybrid NPV",
+                "primary_output": "output/auxiliary_heat_sources.csv; output/financial_summary.csv; output/figures/auxiliary_hybrid_economics.png",
+                "source_ids": source_map["Best-financial hybrid NPV"],
+            },
         ]
     )
 
@@ -433,6 +495,8 @@ def write_outputs(
     supply_temperature_sweep: pd.DataFrame,
     ambient_closure_map: dict,
     zero_warmup_target_search: dict,
+    lng_transport_sensitivity: dict,
+    idc_secondary_granularity: dict,
     system_eval: dict,
     validation_messages: list[str],
     legacy_result: dict | None = None,
@@ -455,6 +519,8 @@ def write_outputs(
     supply_temperature_sweep.to_csv(output_dir / "supply_temperature_sweep.csv", index=False)
     ambient_closure_map["table"].to_csv(output_dir / "ambient_closure_map.csv", index=False)
     zero_warmup_target_search["table"].to_csv(output_dir / "zero_warmup_target_search.csv", index=False)
+    lng_transport_sensitivity["table"].to_csv(output_dir / "lng_transport_sensitivity.csv", index=False)
+    idc_secondary_granularity["table"].to_csv(output_dir / "idc_secondary_granularity.csv", index=False)
     requirement_traceability = _build_requirement_traceability(system_eval)
     requirement_traceability.to_csv(output_dir / "requirement_traceability.csv", index=False)
     annual_summary = pd.DataFrame(
@@ -478,8 +544,11 @@ def write_outputs(
             {"metric": "Core NPV", "value": system_eval["financial_core"]["npv_krw"], "unit": "KRW"},
             {"metric": "Core IRR", "value": system_eval["financial_core"]["irr_fraction"], "unit": "-"},
             {"metric": "Core discounted payback", "value": system_eval["financial_core"]["discounted_payback_years"], "unit": "years"},
+            {"metric": "Best-power hybrid CAPEX", "value": system_eval["auxiliary_heat_sources"]["selected"]["total_installed_capex_krw"], "unit": "KRW"},
+            {"metric": "Best-power hybrid NPV", "value": system_eval["auxiliary_heat_sources"]["selected"]["npv_krw"], "unit": "KRW"},
             {"metric": "Best-hybrid NPV", "value": system_eval["financial_best_hybrid"]["npv_krw"], "unit": "KRW"},
             {"metric": "Best-hybrid IRR", "value": system_eval["financial_best_hybrid"]["irr_fraction"], "unit": "-"},
+            {"metric": "Best-hybrid discounted payback", "value": system_eval["financial_best_hybrid"]["discounted_payback_years"], "unit": "years"},
         ]
     ).to_csv(output_dir / "financial_summary.csv", index=False)
     if legacy_result and legacy_result.get("available"):
@@ -502,7 +571,10 @@ def write_outputs(
     _save_zero_warmup_gap(figure_dir, zero_warmup_target_search["table"])
     _save_annual_impact(figure_dir, system_eval["annual"])
     _save_auxiliary_heat_sources(figure_dir, system_eval["auxiliary_heat_sources"]["table"])
+    _save_auxiliary_hybrid_economics(figure_dir, system_eval["auxiliary_heat_sources"]["table"])
     _save_capex_breakdown(figure_dir, system_eval["capex"]["table"])
+    _save_lng_transport_sensitivity(figure_dir, lng_transport_sensitivity["table"])
+    _save_idc_secondary_granularity(figure_dir, idc_secondary_granularity["table"])
 
     base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
     base_distance_row = distance_scenarios.loc[base_distance_index]
@@ -516,6 +588,11 @@ def write_outputs(
     zero_search_by_distance = zero_warmup_target_search["selected_by_distance"]
     base_distance_target = float(pipeline_result["base_distance_m"])
     long_distance_target = float(long_distance_row["distance_m"])
+    transport_table = lng_transport_sensitivity["table"]
+    feasible_transport = transport_table[transport_table["status"] == "feasible"].copy()
+    transport_reference = lng_transport_sensitivity["reference"]
+    idc_granularity_table = idc_secondary_granularity["table"]
+    best_financial_hybrid = system_eval["best_financial_hybrid"]
     report_lines = [
         "# LNG Cold-Energy IDC Cooling System Summary",
         "",
@@ -590,10 +667,19 @@ def write_outputs(
         best_aux = system_eval["auxiliary_heat_sources"]["selected"]
         report_lines.extend(
             [
-                f"- Best configured source: **{best_aux['scenario_label']}**",
-                f"- Auxiliary electrical penalty: **{best_aux['auxiliary_power_kw']:,.1f} kW**",
-                f"- Total system power including pump and auxiliary source: **{best_aux['total_system_power_kw']:,.1f} kW**",
-                f"- Net power saving versus baseline: **{best_aux['net_power_saving_kw']:,.1f} kW**",
+        f"- Best configured source: **{best_aux['scenario_label']}**",
+        f"- Auxiliary electrical penalty: **{best_aux['auxiliary_power_kw']:,.1f} kW**",
+        f"- Total system power including pump and auxiliary source: **{best_aux['total_system_power_kw']:,.1f} kW**",
+        f"- Net power saving versus baseline: **{best_aux['net_power_saving_kw']:,.1f} kW**",
+        f"- Total installed CAPEX with this source: **{best_aux['total_installed_capex_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
+        f"- Scenario NPV: **{best_aux['npv_krw'] / 1_000_000_000.0:,.2f} billion KRW**",
+        (
+            f"- Best financial hybrid source: **{best_financial_hybrid['scenario_label']}**, "
+            f"NPV **{best_financial_hybrid['npv_krw'] / 1_000_000_000.0:,.2f} billion KRW**, "
+            f"discounted payback **{best_financial_hybrid['discounted_payback_years'] if pd.notna(best_financial_hybrid['discounted_payback_years']) else 'not reached'}**"
+        )
+        if best_financial_hybrid is not None
+        else "- No hybrid financial ranking was generated.",
             ]
         )
     report_lines.extend(
@@ -656,6 +742,40 @@ def write_outputs(
         )
         if zero_search_by_distance[long_distance_target]["near_best"] is not None
         else "- No feasible long-distance candidate remained in the target-distance search.",
+        "",
+        "## Mixed-LNG Transport Proxy Sensitivity",
+        "",
+        (
+            f"- Reference transport proxy: **{transport_reference['proxy_label']}**"
+        )
+        if transport_reference is not None
+        else "- No reference transport proxy result was available.",
+        (
+            f"- Successful proxy cases: **{len(feasible_transport)}** / **{len(transport_table)}**"
+        ),
+        (
+            f"- Required-area span across successful proxies: **{feasible_transport['required_area_m2'].min():,.1f} to {feasible_transport['required_area_m2'].max():,.1f} m2**"
+        )
+        if not feasible_transport.empty
+        else "- No feasible proxy case was available to quantify area sensitivity.",
+        (
+            f"- Tube-side pressure-drop span across successful proxies: **{feasible_transport['tube_pressure_drop_kpa'].min():,.1f} to {feasible_transport['tube_pressure_drop_kpa'].max():,.1f} kPa**"
+        )
+        if not feasible_transport.empty
+        else "- No feasible proxy case was available to quantify tube-side pressure-drop sensitivity.",
+        "",
+        "## IDC Secondary-Loop Granularity Sensitivity",
+        "",
+        f"- Base equivalent-network pump power: **{idc_secondary_granularity['base_selected']['pump_power_kw']:,.1f} kW**",
+        (
+            f"- Granularity sensitivity range: **{idc_granularity_table['pump_power_kw'].min():,.1f} to {idc_granularity_table['pump_power_kw'].max():,.1f} kW** "
+            f"across {len(idc_granularity_table)} configured network interpretations."
+        ),
+        (
+            f"- Most conservative configured case: **{idc_secondary_granularity['selected_conservative']['scenario_label']}**, "
+            f"pump power **{idc_secondary_granularity['selected_conservative']['pump_power_kw']:,.1f} kW** "
+            f"({idc_secondary_granularity['selected_conservative']['pump_power_delta_pct_vs_base']:+.1f}% vs base)."
+        ),
         "",
         "## Alternative Coolants",
         "",

@@ -17,7 +17,13 @@ def _tube_pressure_drop(length_m: float, diameter_i_m: float, velocity: float, r
     return friction * (length_m / diameter_i_m) * rho * velocity ** 2 / 2.0
 
 
-def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_kw: float) -> dict[str, object]:
+def design_lng_vaporizer(
+    config: dict,
+    selected_fluid: dict,
+    required_lng_duty_kw: float,
+    *,
+    transport_property_proxy_override: str | None = None,
+) -> dict[str, object]:
     assignment = config["assignment"]
     hx_cfg = config["hx_design"]
     loop = config["coolant_loop"]
@@ -28,7 +34,15 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
     cold_bounds = hx_cfg["segment_boundaries_k"]
     lng_mixture = build_lng_mixture_definition(config)
     lng_fluid = lng_mixture.coolprop_string
-    lng_transport_fluid = str(config.get("lng_mixture", {}).get("transport_property_proxy", lng_fluid))
+    if transport_property_proxy_override == "configured_mixture":
+        lng_transport_fluid = lng_fluid
+        lng_transport_label = f"{lng_mixture.label} transport"
+    elif transport_property_proxy_override is not None:
+        lng_transport_fluid = str(transport_property_proxy_override)
+        lng_transport_label = str(transport_property_proxy_override)
+    else:
+        lng_transport_fluid = str(config.get("lng_mixture", {}).get("transport_property_proxy", lng_fluid))
+        lng_transport_label = str(config.get("lng_mixture", {}).get("transport_property_proxy", lng_fluid))
 
     h_lng = [props_si("H", "T", temp_k, "P", lng_pressure_pa, lng_fluid) for temp_k in cold_bounds]
     q_total_w = required_lng_duty_kw * 1000.0
@@ -168,6 +182,7 @@ def design_lng_vaporizer(config: dict, selected_fluid: dict, required_lng_duty_k
         "lng_mixture_label": lng_mixture.label,
         "lng_fluid": lng_fluid,
         "lng_transport_fluid": lng_transport_fluid,
+        "lng_transport_label": lng_transport_label,
         "lng_normalized_components": lng_mixture.normalized_components,
         "required_lng_duty_kw": required_lng_duty_kw,
         "m_lng_kg_s": m_lng,

@@ -73,3 +73,12 @@
 | ASM-067 | Discount rate for NPV/IRR | 8% | 민간 설비투자 관점의 보수적 nominal discount rate 근사 |
 | ASM-068 | O&M and salvage for financial model | annual O&M 2% of CAPEX, salvage 0% | order-of-magnitude 수준의 경제성 평가에서 유지관리와 잔존가치를 단순화하기 위한 금융 가정 |
 | ASM-069 | LNG tube-side transport-property proxy | Use pure methane for tube-side viscosity, conductivity, density, and heat capacity while keeping mixture enthalpy for duty partitioning | CoolProp의 극저온 혼합 LNG transport-property flash가 불안정한 구간을 피하면서 혼합 LNG의 엔탈피 기반 효과는 유지하기 위한 절충 |
+| ASM-070 | Electric-resistance auxiliary CAPEX model | fixed 0.10 billion KRW + 70,000 KRW/kWth | supplemental warm-up을 전기 히터로 직접 공급하는 최악 시나리오의 간단 장치비 근사 |
+| ASM-071 | Ambient-air trim-heater CAPEX model | fixed 0.40 billion KRW + 160,000 KRW/kWth | 외기 열교환기와 팬/보조 순환설비를 포함하는 저급열 회수형 보조 가열 장치비 근사 |
+| ASM-072 | Waste-heat recovery CAPEX model | fixed 0.60 billion KRW + 220,000 KRW/kWth | 인접 폐열 루프 연결, 열교환기, 순환펌프를 포함하는 회수형 하이브리드 보조 열원 장치비 근사 |
+| ASM-073 | Heat-pump booster CAPEX model | fixed 0.80 billion KRW + 650,000 KRW/kWth | 소형 heat-pump booster와 보조 열교환기/제어기를 포함하는 적극형 보조 열원 장치비 근사 |
+| ASM-074 | Electric-resistance auxiliary O&M fraction | 1% of auxiliary CAPEX/year | 전기저항 가열기는 회전기기와 열교환기가 적어 유지관리 부담이 상대적으로 낮다는 가정 |
+| ASM-075 | Ambient-air trim-heater O&M fraction | 2% of auxiliary CAPEX/year | 외기 열교환기, 팬, 순환계통의 정기 유지비를 간단 승수로 반영 |
+| ASM-076 | Waste-heat recovery auxiliary O&M fraction | 2.5% of auxiliary CAPEX/year | 회수 루프와 추가 열교환기, 펌프 유지관리를 반영한 보수적 O&M 가정 |
+| ASM-077 | Heat-pump booster O&M fraction | 3.5% of auxiliary CAPEX/year | 압축기 기반 booster의 상대적으로 높은 정비 부담을 단순 승수로 반영 |
+| ASM-078 | LNG transport-proxy sensitivity set | Methane, Ethane, Propane, configured mixture | 혼합 LNG 엔탈피 모델은 유지하되 tube-side transport property proxy 선택이 기화기 면적과 압력강하에 미치는 영향을 bounded sensitivity로 확인하기 위한 비교 세트 |
