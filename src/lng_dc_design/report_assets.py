@@ -8,6 +8,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
 
+from .config import load_config
 from .thermo import ensure_directory
 
 
@@ -21,6 +22,13 @@ def _dataframe_to_markdown(frame: pd.DataFrame) -> str:
     for _, row in frame.iterrows():
         rows.append("| " + " | ".join(str(row[column]) for column in headers) + " |")
     return "\n".join(rows)
+
+
+def _target_distance_row(frame: pd.DataFrame, target_distance_m: float) -> pd.Series:
+    target_rows = frame.loc[(frame["distance_m"] - target_distance_m).abs() < 1e-6]
+    if not target_rows.empty:
+        return target_rows.iloc[0]
+    return frame.iloc[(frame["distance_m"] - target_distance_m).abs().argmin()]
 
 
 def _save_load_breakdown(output_dir: Path, load_result: object) -> None:
@@ -191,10 +199,16 @@ def _save_legacy_comparison(output_dir: Path, legacy_result: dict | None) -> Non
 def _save_alternative_designs(output_dir: Path, scenario_result: dict) -> None:
     frame = scenario_result["alternatives"]
     feasible = frame[frame["design_feasible"]].copy()
+    title = "Base-Duty-Feasible Coolant Alternatives"
+    if feasible.empty and "hybrid_operable" in frame.columns:
+        feasible = frame[frame["hybrid_operable"]].copy()
+        title = "Hybrid-Operable Coolant Alternatives"
+    if feasible.empty:
+        return
     fig, ax = plt.subplots(figsize=(9, 5))
     ax.bar(feasible["fluid"], feasible["pump_power_kw"], color="#4f6d7a")
     ax.set_ylabel("Core system power (kW)")
-    ax.set_title("Feasible Coolant Alternatives")
+    ax.set_title(title)
     ax.tick_params(axis="x", rotation=20)
     fig.tight_layout()
     fig.savefig(output_dir / "alternative_designs.png", dpi=180)
@@ -495,12 +509,14 @@ def write_outputs(
     supply_temperature_sweep: pd.DataFrame,
     ambient_closure_map: dict,
     zero_warmup_target_search: dict,
+    passive_zero_warmup_search: dict,
     lng_transport_sensitivity: dict,
     idc_secondary_granularity: dict,
     system_eval: dict,
     validation_messages: list[str],
     legacy_result: dict | None = None,
 ) -> None:
+    config = load_config(config_path).values
     output_dir = ensure_directory(project_root / "output")
     figure_dir = ensure_directory(output_dir / "figures")
 
@@ -519,6 +535,7 @@ def write_outputs(
     supply_temperature_sweep.to_csv(output_dir / "supply_temperature_sweep.csv", index=False)
     ambient_closure_map["table"].to_csv(output_dir / "ambient_closure_map.csv", index=False)
     zero_warmup_target_search["table"].to_csv(output_dir / "zero_warmup_target_search.csv", index=False)
+    passive_zero_warmup_search["table"].to_csv(output_dir / "passive_zero_warmup_search.csv", index=False)
     lng_transport_sensitivity["table"].to_csv(output_dir / "lng_transport_sensitivity.csv", index=False)
     idc_secondary_granularity["table"].to_csv(output_dir / "idc_secondary_granularity.csv", index=False)
     requirement_traceability = _build_requirement_traceability(system_eval)
@@ -576,9 +593,9 @@ def write_outputs(
     _save_lng_transport_sensitivity(figure_dir, lng_transport_sensitivity["table"])
     _save_idc_secondary_granularity(figure_dir, idc_secondary_granularity["table"])
 
-    base_distance_index = (distance_scenarios["distance_m"] - float(pipeline_result["base_distance_m"])).abs().idxmin()
-    base_distance_row = distance_scenarios.loc[base_distance_index]
-    long_distance_row = distance_scenarios.sort_values("distance_m").iloc[-1]
+    base_distance_row = _target_distance_row(distance_scenarios, float(pipeline_result["base_distance_m"]))
+    long_distance_target_m = float(config["system_targets"]["long_distance_pipeline_m"])
+    long_distance_row = _target_distance_row(distance_scenarios, long_distance_target_m)
     feasible_supply_sweep = supply_temperature_sweep[supply_temperature_sweep["status"] == "feasible"].sort_values("pump_power_kw")
     best_supply_row = feasible_supply_sweep.iloc[0] if not feasible_supply_sweep.empty else None
     feasible_closure = ambient_closure_map["table"][ambient_closure_map["table"]["status"] == "feasible"].copy()
@@ -587,7 +604,7 @@ def write_outputs(
     best_closure = ambient_closure_map["selected"]
     zero_search_by_distance = zero_warmup_target_search["selected_by_distance"]
     base_distance_target = float(pipeline_result["base_distance_m"])
-    long_distance_target = float(long_distance_row["distance_m"])
+    long_distance_target = long_distance_target_m
     transport_table = lng_transport_sensitivity["table"]
     feasible_transport = transport_table[transport_table["status"] == "feasible"].copy()
     transport_reference = lng_transport_sensitivity["reference"]
@@ -641,8 +658,8 @@ def write_outputs(
         f"- Long-distance hydraulic/state feasibility: **{bool(long_distance_row['hydraulic_feasible'])}**",
         f"- Long-distance base-duty load satisfaction: **{bool(long_distance_row['base_duty_meets_idc_load'])}**",
         f"- Long-distance supplemental warm-up required: **{bool(long_distance_row['requires_supplemental_warmup'])}**",
-        f"- Long-distance interpretation: **{'Hybrid-feasible but base-duty short' if bool(long_distance_row['hybrid_load_satisfied']) and not bool(long_distance_row['base_duty_meets_idc_load']) else ('Base-duty feasible' if bool(long_distance_row['base_duty_meets_idc_load']) else 'Hydraulically infeasible')}**",
-        f"- Estimated maximum feasible one-way distance: **{pipeline_result['max_feasible_distance_m'] / 1000.0:,.1f} km**",
+        f"- Long-distance interpretation: **{'Hybrid-operable but base-duty short' if bool(long_distance_row.get('hybrid_operation_feasible', long_distance_row['hybrid_load_satisfied'])) and not bool(long_distance_row['base_duty_meets_idc_load']) else ('Base-duty feasible' if bool(long_distance_row['base_duty_meets_idc_load']) else 'Hydraulically infeasible')}**",
+        f"- Estimated maximum hybrid-operable one-way distance: **{pipeline_result['max_feasible_distance_m'] / 1000.0:,.1f} km**",
         f"- Estimated maximum base-duty one-way distance: **{pipeline_result['max_base_duty_distance_m'] / 1000.0:,.1f} km**",
         "",
         "## Annual Impact",
@@ -817,16 +834,25 @@ def write_outputs(
             "- `output/supply_temperature_sweep.csv`",
             "- `output/ambient_closure_map.csv`",
             "- `output/zero_warmup_target_search.csv`",
+            "- `output/passive_zero_warmup_search.csv`",
             "- `output/annual_summary.csv`",
             "- `output/auxiliary_heat_sources.csv`",
+            "- `output/lng_transport_sensitivity.csv`",
+            "- `output/idc_secondary_granularity.csv`",
             "- `output/financial_summary.csv`",
             "- `output/payback_allowable_capex.csv`",
             "- `output/requirement_traceability.csv`",
+            "- `output/requirement_traceability.md`",
             "- `output/source_map.csv`",
+            "- `output/baseline_cycle_points.csv`",
             "- `output/idc_hx_profile.csv`",
             "- `output/idc_secondary_loop_scan.csv`",
             "- `output/hx_segments.csv`",
+            "- `output/hx_geometry_candidates_top100.csv`",
+            "- `output/pipeline_scan_top200.csv`",
             "- `output/pipeline_sensitivity.csv`",
+            "- `output/legacy_comparison.csv`",
+            "- `output/report_summary.md`",
             "- `output/figures/*.png`",
             "",
             "## Requirement Traceability",

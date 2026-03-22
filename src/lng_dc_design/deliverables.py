@@ -85,6 +85,13 @@ def _config_source_id(project_config, dotted_path: str) -> str:
     return citation.source_id if citation else "-"
 
 
+def _target_distance_row(frame: pd.DataFrame, target_distance_m: float) -> pd.Series:
+    target_rows = frame.loc[(frame["distance_m"] - target_distance_m).abs() < 1e-6]
+    if not target_rows.empty:
+        return target_rows.iloc[0]
+    return frame.iloc[(frame["distance_m"] - target_distance_m).abs().argmin()]
+
+
 def _format_celsius(temperature_k: float) -> str:
     return f"{temperature_k - 273.15:.1f}"
 
@@ -112,7 +119,7 @@ def _build_report_front_matter(ctx: dict[str, object]) -> list[str]:
             f"연간 회피 배출은 **{ctx['annual_avoided_tco2']} tCO2/년**으로 평가되었다. "
             f"대표 혼합 LNG는 **{ctx['lng_stream_model']}**으로 모델링했고, "
             f"10 km 기본안 기준 핵심 설비 CAPEX는 **{ctx['core_capex_bkrw']} 십억원**, NPV는 **{ctx['core_npv_bkrw']} 십억원**으로 추정되었다. "
-            f"현재 운전점에서의 추정 최대 하이브리드 성립거리는 약 **{ctx['max_distance_km']} km**, "
+            f"현재 운전점에서의 추정 최대 하이브리드 운전 가능거리는 약 **{ctx['max_distance_km']} km**, "
             f"기본 LNG duty 기준 최대 성립거리는 약 **{ctx['max_base_distance_km']} km**이며, "
             f"35 km 조건은 **{ctx['long_distance_status']}**으로 판정되었다."
         ),
@@ -451,7 +458,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
         "![거리 민감도](../output/figures/pipeline_distance_sensitivity.png)",
         "",
         (
-            f"거리 증가에 따라 열유입이 거의 선형적으로 증가하면서, 현재 운전점에서의 추정 최대 편도 성립거리는 **{ctx['max_distance_km']} km**로 나타났다. "
+            f"거리 증가에 따라 열유입이 거의 선형적으로 증가하면서, 현재 운전점에서의 추정 최대 편도 하이브리드 운전 가능거리는 **{ctx['max_distance_km']} km**로 나타났다. "
             f"따라서 **{ctx['long_distance_km']} km** 조건은 기본안의 단순 확장만으로는 **{ctx['long_distance_status']} 판정**을 받는다."
         ),
         "",
@@ -569,7 +576,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
             f"10 km 기본 설계점에서 **{ctx['base_distance_conclusion_text']}**. 선정된 기본안은 **{ctx['selected_coolant']}**를 2차 루프 유체로 사용하고, "
             f"기화기 duty **{ctx['lng_duty_kw']} kW**, core system power **{ctx['core_power_kw']} kW**, "
             f"배관 열유입 **{ctx['pipeline_heat_gain_kw']} kW**의 수준에서 IDC 부하를 충족한다. "
-            f"현재 경계는 약 **{ctx['max_distance_km']} km**이며, 35 km 조건은 **{ctx['long_distance_status']} 판정**으로 정리되었다."
+            f"현재 하이브리드 운전 가능 경계는 약 **{ctx['max_distance_km']} km**이며, 35 km 조건은 **{ctx['long_distance_status']} 판정**으로 정리되었다."
         ),
         "",
         "## 부록 A. 출처 레지스트리",
@@ -586,6 +593,7 @@ def _build_report_result_sections(ctx: dict[str, object]) -> list[str]:
 
 
 def build_report(project_root: Path) -> Path:
+    config = load_config(project_root / "config" / "base.toml").values
     output_dir = project_root / "output"
     deliverables_dir = ensure_directory(project_root / "deliverables")
     project_config = load_config(project_root / "config" / "base.toml")
@@ -610,14 +618,15 @@ def build_report(project_root: Path) -> Path:
 
     selected_alternative = alternatives.iloc[0]
     selected_pipeline = pipeline_scan.iloc[0]
-    base_distance = distance.sort_values("distance_km").iloc[0]
-    long_distance = distance.sort_values("distance_km").iloc[-1]
+    base_distance = _target_distance_row(distance, float(config["assignment"]["pipeline_distance_m"]))
+    long_distance = _target_distance_row(distance, float(config["system_targets"]["long_distance_pipeline_m"]))
     base_distance_base_ok = bool(base_distance["base_duty_meets_idc_load"])
-    base_distance_hybrid_ok = bool(base_distance["hybrid_load_satisfied"])
+    base_distance_hybrid_ok = bool(base_distance.get("hybrid_operation_feasible", base_distance["hybrid_load_satisfied"]))
     long_distance_base_ok = bool(long_distance["base_duty_meets_idc_load"])
-    long_distance_hybrid_ok = bool(long_distance["hybrid_load_satisfied"])
+    long_distance_hybrid_ok = bool(long_distance.get("hybrid_operation_feasible", long_distance["hybrid_load_satisfied"]))
     long_distance_requires_supp = bool(long_distance["requires_supplemental_warmup"])
-    best_temp = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw").iloc[0]
+    feasible_temperature = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw")
+    best_temp = feasible_temperature.iloc[0] if not feasible_temperature.empty else None
     feasible_closure = ambient_closure[ambient_closure["status"] == "feasible"].copy()
     closure_candidates = feasible_closure[feasible_closure["ambient_only_closure_distance_km"].notna()].sort_values(
         ["ambient_only_closure_distance_km", "pump_power_kw", "screening_score"],
@@ -697,7 +706,7 @@ def build_report(project_root: Path) -> Path:
             "열유입 (kW)": distance["heat_gain_kw"].map(_format_number),
             "추가 warm-up (kW)": distance["supplemental_warmup_kw"].map(_format_number),
             "기본 duty 여유 (kW)": distance["base_duty_margin_kw"].map(_format_number),
-            "하이브리드 성립": distance["hybrid_load_satisfied"].map(lambda x: "예" if bool(x) else "아니오"),
+            "하이브리드 운전 가능": distance["hybrid_operation_feasible"].map(lambda x: "예" if bool(x) else "아니오"),
             "기본 duty 충족": distance["base_duty_meets_idc_load"].map(lambda x: "예" if bool(x) else "아니오"),
         }
     )
@@ -706,7 +715,7 @@ def build_report(project_root: Path) -> Path:
             "공급온도 (°C)": temperature["supply_temp_c"].map(_format_number),
             "선정 유체": temperature["selected_fluid"].fillna("-"),
             "Core system power (kW)": temperature["pump_power_kw"].map(_format_number),
-            "최대 하이브리드 성립거리 (km)": temperature["max_feasible_distance_km"].map(_format_number),
+            "최대 하이브리드 운전 가능거리 (km)": temperature["max_feasible_distance_km"].map(_format_number),
             "최대 기본 duty 성립거리 (km)": temperature["max_base_duty_distance_km"].map(_format_number),
             "35 km 기본 duty 충족": temperature["long_distance_base_duty_meets_load"].map(lambda x: "예" if bool(x) else "아니오"),
             "상태": temperature["status"].replace({"feasible": "성립", "failed": "실패"}),
@@ -804,8 +813,8 @@ def build_report(project_root: Path) -> Path:
     load_table_md = _markdown_table(load_table, ["부하 항목", "열부하 (kW)", "비중 (%)"])
     input_conditions_md = _markdown_table(input_conditions_table, ["항목", "값", "출처 ID"])
     alternatives_md = _markdown_table(alternatives_table, ["유체", "스크리닝 점수", "Core system power (kW)", "추가 warm-up (kW)", "쉘 직경 (m)", "연간 비용절감 (백만원/년)"])
-    distance_md = _markdown_table(distance_table, ["거리 (km)", "Core system power (kW)", "열유입 (kW)", "추가 warm-up (kW)", "기본 duty 여유 (kW)", "하이브리드 성립", "기본 duty 충족"])
-    temperature_md = _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "Core system power (kW)", "최대 하이브리드 성립거리 (km)", "최대 기본 duty 성립거리 (km)", "35 km 기본 duty 충족", "상태"])
+    distance_md = _markdown_table(distance_table, ["거리 (km)", "Core system power (kW)", "열유입 (kW)", "추가 warm-up (kW)", "기본 duty 여유 (kW)", "하이브리드 운전 가능", "기본 duty 충족"])
+    temperature_md = _markdown_table(temperature_table, ["공급온도 (°C)", "선정 유체", "Core system power (kW)", "최대 하이브리드 운전 가능거리 (km)", "최대 기본 duty 성립거리 (km)", "35 km 기본 duty 충족", "상태"])
     closure_md = _markdown_table(
         closure_table,
         ["공급온도 (°C)", "유체", "기본안 추가 warm-up (kW)", "무보조 성립거리 (km)", "35 km 무보조 성립", "기본 스크리닝 선정"],
@@ -1132,14 +1141,14 @@ def build_report(project_root: Path) -> Path:
         "long_distance_status": (
             "기본 LNG duty 성립"
             if long_distance_base_ok
-            else "하이브리드 성립, 기본 LNG duty 불성립"
+            else "하이브리드 운전 가능, 기본 LNG duty 불성립"
             if long_distance_hybrid_ok
-            else "하이브리드까지 포함해 불성립"
+            else "하이브리드 운전까지 포함해 불성립"
         ),
         "long_distance_discussion": long_distance_discussion,
         "long_distance_extension_text": long_distance_extension_text,
-        "best_supply_temp_c": _format_number(best_temp["supply_temp_c"]),
-        "best_supply_fluid": best_temp["selected_fluid"],
+        "best_supply_temp_c": _format_number(best_temp["supply_temp_c"]) if best_temp is not None else "-",
+        "best_supply_fluid": best_temp["selected_fluid"] if best_temp is not None else "해당 없음",
         "recover_35km_text": recover_35km_text,
         "best_closure_temp_c": _format_number(best_closure["supply_temp_c"]) if best_closure is not None else "-",
         "best_closure_fluid": best_closure["fluid"] if best_closure is not None else "-",
@@ -1168,6 +1177,7 @@ def build_report(project_root: Path) -> Path:
 
 
 def build_presentation_script(project_root: Path) -> Path:
+    config = load_config(project_root / "config" / "base.toml").values
     output_dir = project_root / "output"
     deliverables_dir = ensure_directory(project_root / "deliverables")
     summary = _summary_map(output_dir)
@@ -1180,15 +1190,17 @@ def build_presentation_script(project_root: Path) -> Path:
     idc_granularity = pd.read_csv(output_dir / "idc_secondary_granularity.csv")
     passive_zero_warmup = pd.read_csv(output_dir / "passive_zero_warmup_search.csv")
     selected_alternative = alternatives.iloc[0]
-    base_distance = distance.sort_values("distance_km").iloc[0]
-    long_distance = distance.sort_values("distance_km").iloc[-1]
+    base_distance = _target_distance_row(distance, float(config["assignment"]["pipeline_distance_m"]))
+    long_distance = _target_distance_row(distance, float(config["system_targets"]["long_distance_pipeline_m"]))
     base_distance_base_ok = bool(base_distance["base_duty_meets_idc_load"])
-    base_distance_hybrid_ok = bool(base_distance["hybrid_load_satisfied"])
+    base_distance_hybrid_ok = bool(base_distance.get("hybrid_operation_feasible", base_distance["hybrid_load_satisfied"]))
     long_distance_base_ok = bool(long_distance["base_duty_meets_idc_load"])
-    long_distance_hybrid_ok = bool(long_distance["hybrid_load_satisfied"])
+    long_distance_hybrid_ok = bool(long_distance.get("hybrid_operation_feasible", long_distance["hybrid_load_satisfied"]))
     high_temp = temperature[
         (temperature["status"] == "feasible") & (temperature["long_distance_base_duty_meets_load"] == True)
     ].head(1)
+    feasible_temperature = temperature[temperature["status"] == "feasible"].sort_values("pump_power_kw")
+    best_temperature = feasible_temperature.iloc[0] if not feasible_temperature.empty else None
     best_auxiliary = auxiliary_heat.sort_values("net_power_saving_kw", ascending=False).iloc[0]
     best_financial_auxiliary = auxiliary_heat.sort_values(["npv_krw", "annual_cost_saving_krw_per_year"], ascending=[False, False]).iloc[0]
     practical_passive = passive_zero_warmup[passive_zero_warmup["practical_zero_warmup_design_found"] == True].copy()
@@ -1255,9 +1267,9 @@ def build_presentation_script(project_root: Path) -> Path:
         "- 배관은 압력강하와 열유입을 동시에 관리해야 한다는 점을 말한다.",
         "",
         "## 슬라이드 13. 순환 배관 설계 - 거리 민감도",
-        f"- 추정 최대 하이브리드 편도 성립거리는 약 {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km다.",
+        f"- 추정 최대 하이브리드 편도 운전 가능거리는 약 {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km다.",
         f"- 기본 LNG duty 기준 최대 편도 성립거리는 약 {_format_number(distance['max_base_duty_distance_m'].iloc[0] / 1000.0)} km다.",
-        f"- 따라서 현재 설계점에서 {int(long_distance['distance_km'])} km 조건은 {'기본 LNG duty까지 성립' if long_distance_base_ok else '하이브리드 성립, 기본 LNG duty 불성립' if long_distance_hybrid_ok else '하이브리드까지 포함해 불성립'}이라고 정리한다.",
+        f"- 따라서 현재 설계점에서 {int(long_distance['distance_km'])} km 조건은 {'기본 LNG duty까지 성립' if long_distance_base_ok else '하이브리드 운전은 가능하지만 기본 LNG duty는 불성립' if long_distance_hybrid_ok else '하이브리드 운전까지 포함해 불성립'}이라고 정리한다.",
         "",
         "## 슬라이드 14. 순환 배관 설계 - 공급온도 민감도",
         "- 공급온도를 높이면 성립거리는 늘어나지만, 유체 선택과 펌프동력이 같이 바뀐다고 설명한다.",
@@ -1294,7 +1306,7 @@ def build_presentation_script(project_root: Path) -> Path:
         "",
         "## 슬라이드 19. 결론",
         f"- 10 km 기본안은 {'기본 LNG duty 기준으로' if base_distance_base_ok else 'supplemental warm-up을 포함한 하이브리드 운전 기준으로' if base_distance_hybrid_ok else '하이브리드까지 포함해도'} 기술적으로 {'성립한다고' if base_distance_hybrid_ok else '불성립한다고'} 결론낸다.",
-        f"- 동시에 {int(long_distance['distance_km'])} km 조건은 현재 기본안에서 {'기본 LNG duty까지 성립' if long_distance_base_ok else '하이브리드 성립, 기본 LNG duty 불성립' if long_distance_hybrid_ok else '하이브리드까지 포함해 불성립'}이며, 추정 최대 하이브리드 편도 성립거리는 약 {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km라고 정리한다.",
+        f"- 동시에 {int(long_distance['distance_km'])} km 조건은 현재 기본안에서 {'기본 LNG duty까지 성립' if long_distance_base_ok else '하이브리드 운전은 가능하지만 기본 LNG duty는 불성립' if long_distance_hybrid_ok else '하이브리드 운전까지 포함해 불성립'}이며, 추정 최대 하이브리드 편도 운전 가능거리는 약 {_format_number(distance['max_feasible_distance_m'].iloc[0] / 1000.0)} km라고 정리한다.",
     ]
     if (not long_distance_base_ok) and (not high_temp.empty):
         row = high_temp.iloc[0]
@@ -1304,6 +1316,11 @@ def build_presentation_script(project_root: Path) -> Path:
         )
     script_lines.extend(
         [
+            (
+                f"- 공급온도 스윕 최적점은 {best_temperature['supply_temp_c']:.1f} °C / {best_temperature['selected_fluid']}라고 덧붙인다."
+                if best_temperature is not None
+                else "- 공급온도 스윕에서는 현재 설정 범위 안에서 feasible 운전점이 따로 남지 않았다고 덧붙인다."
+            ),
             (
                 "- 현실성 필터 결과 "
                 + ("채택 가능한 무보조 해가 남는다고 설명한다." if not practical_passive.empty else "채택 가능한 무보조 해는 아직 없다고 정리한다.")
@@ -1333,7 +1350,12 @@ def build_presentation(project_root: Path) -> Path:
     if not node_modules_dir.exists():
         subprocess.run([npm_executable, "install"], cwd=slides_src_dir, check=True)
 
-    subprocess.run([node_executable, str(deck_source)], cwd=slides_src_dir, check=True)
+    config = load_config(project_root / "config" / "base.toml").values
+    env = os.environ.copy()
+    env["LNG_IDC_BASE_DISTANCE_M"] = str(float(config["assignment"]["pipeline_distance_m"]))
+    env["LNG_IDC_LONG_DISTANCE_M"] = str(float(config["system_targets"]["long_distance_pipeline_m"]))
+
+    subprocess.run([node_executable, str(deck_source)], cwd=slides_src_dir, check=True, env=env)
 
     pptx_path = deliverables_dir / "presentation_draft.pptx"
     if not pptx_path.exists():

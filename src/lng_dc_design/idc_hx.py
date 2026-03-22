@@ -20,13 +20,13 @@ def evaluate_idc_heat_exchange(
     chilled_return_k = assignment["chilled_water_return_temp_k"]
     minimum_approach_k = assignment["minimum_temperature_approach_k"]
     utilization_target_fraction = config["system_targets"]["idc_cooling_utilization_fraction"]
-    minimum_return_to_lng_k = assignment["ng_outlet_temp_k"] + minimum_approach_k
+    minimum_hot_end_requirement_k = assignment["ng_outlet_temp_k"] + minimum_approach_k
 
     coolant_after_idc_temp_k = chilled_return_k - minimum_approach_k
     if coolant_after_idc_temp_k <= supply_temp_k:
         raise RuntimeError("IDC heat exchanger target outlet is not above the coolant supply temperature.")
-    if minimum_return_to_lng_k <= coolant_after_idc_temp_k:
-        raise RuntimeError("Required LNG hot-end return temperature must exceed the IDC outlet temperature.")
+    minimum_return_to_lng_k = max(minimum_hot_end_requirement_k, coolant_after_idc_temp_k)
+    idc_outlet_meets_hot_end_requirement = minimum_hot_end_requirement_k <= coolant_after_idc_temp_k
 
     h_supply = props_si("H", "T", supply_temp_k, "P", pressure_pa, fluid)
     h_after_idc = props_si("H", "T", coolant_after_idc_temp_k, "P", pressure_pa, fluid)
@@ -82,10 +82,12 @@ def evaluate_idc_heat_exchange(
         "design_lng_duty_kw": design_lng_duty_kw,
         "total_lng_duty_kw": design_lng_duty_kw,
         "line_heat_gain_budget_kw": line_heat_gain_budget_kw,
+        "minimum_hot_end_requirement_k": minimum_hot_end_requirement_k,
         "minimum_return_to_lng_k": minimum_return_to_lng_k,
         "minimum_lng_duty_kw": minimum_lng_duty_kw,
         "minimum_line_heat_gain_required_kw": minimum_line_heat_gain_required_kw,
         "minimum_hot_end_utilization_fraction": minimum_hot_end_utilization_fraction,
+        "idc_outlet_meets_hot_end_requirement": idc_outlet_meets_hot_end_requirement,
         "supply_temp_k": supply_temp_k,
         "coolant_after_idc_temp_k": coolant_after_idc_temp_k,
         "coolant_mass_flow_kg_s": coolant_mass_flow_kg_s,

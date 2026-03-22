@@ -90,6 +90,22 @@ function toBool(value) {
   return String(value).toLowerCase() === "true";
 }
 
+function selectDistanceRow(rows, targetDistanceM) {
+  if (!rows.length) {
+    return null;
+  }
+  let bestRow = rows[0];
+  let bestDelta = Math.abs(toNumber(bestRow.distance_m) - targetDistanceM);
+  for (const row of rows.slice(1)) {
+    const delta = Math.abs(toNumber(row.distance_m) - targetDistanceM);
+    if (delta < bestDelta) {
+      bestRow = row;
+      bestDelta = delta;
+    }
+  }
+  return bestRow;
+}
+
 function formatNumber(value, digits = 1) {
   return Number(value).toLocaleString("en-US", {
     minimumFractionDigits: digits,
@@ -108,23 +124,28 @@ const transportRows = readCsv("lng_transport_sensitivity.csv");
 const idcGranularityRows = readCsv("idc_secondary_granularity.csv");
 const passiveHeatRows = readCsv("passive_zero_warmup_search.csv");
 
-const baseDistance = distanceRows[0];
+const baseDistanceTargetM = Number(process.env.LNG_IDC_BASE_DISTANCE_M || "10000");
+const longDistanceTargetM = Number(process.env.LNG_IDC_LONG_DISTANCE_M || "35000");
+const baseDistance = selectDistanceRow(distanceRows, baseDistanceTargetM) || distanceRows[0];
 const baseDistanceBaseDutyMeetsLoad = toBool(baseDistance.base_duty_meets_idc_load);
-const baseDistanceHybridSatisfied = toBool(baseDistance.hybrid_load_satisfied);
+const baseDistanceHybridSatisfied = toBool(baseDistance.hybrid_operation_feasible || baseDistance.hybrid_load_satisfied);
 const baseDistanceRequiresSupplementalWarmup = toBool(baseDistance.requires_supplemental_warmup);
-const longDistance = distanceRows[distanceRows.length - 1];
+const longDistance = selectDistanceRow(distanceRows, longDistanceTargetM) || distanceRows[distanceRows.length - 1];
 const longDistanceKm = toNumber(longDistance.distance_km);
 const longDistanceBaseDutyMeetsLoad = toBool(longDistance.base_duty_meets_idc_load);
-const longDistanceHybridSatisfied = toBool(longDistance.hybrid_load_satisfied);
+const longDistanceHybridSatisfied = toBool(longDistance.hybrid_operation_feasible || longDistance.hybrid_load_satisfied);
 const longDistanceRequiresSupplementalWarmup = toBool(longDistance.requires_supplemental_warmup);
 const maxFeasibleDistanceKm = toNumber(longDistance.max_feasible_distance_m) / 1000.0;
 const maxBaseDutyDistanceKm = toNumber(longDistance.max_base_duty_distance_m) / 1000.0;
-const bestSupplyRow = supplyRows
+const feasibleSupplyRows = supplyRows
   .filter((row) => row.status === "feasible")
-  .sort((left, right) => toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw))[0];
+  .sort((left, right) => toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw));
+const bestSupplyRow = feasibleSupplyRows[0] || null;
+const supplyFallbackRow = supplyRows[0] || { supply_temp_k: "220", selected_fluid: "No feasible point", pump_power_kw: "NaN" };
+const displayBestSupplyRow = bestSupplyRow || supplyFallbackRow;
 const recover35Row = supplyRows
   .filter((row) => row.status === "feasible" && toBool(row.long_distance_base_duty_meets_load))
-  .sort((left, right) => toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw))[0] || bestSupplyRow;
+  .sort((left, right) => toNumber(left.pump_power_kw) - toNumber(right.pump_power_kw))[0] || bestSupplyRow || supplyFallbackRow;
 const annualMap = Object.fromEntries(annualRows.map((row) => [row.metric, row]));
 const rankedAlternatives = alternativeRows
   .slice()
@@ -576,7 +597,7 @@ function buildDeck() {
     const slide = pptx.addSlide();
     addSectionHeader(slide, 2, "냉각유체 선정 - 기본안 결정", page++);
     addMetricBox(slide, 0.95, 1.55, 2.35, 1.15, "선정 유체", summary["Selected coolant"].value, "기본안", colors.teal);
-    addMetricBox(slide, 3.55, 1.55, 2.35, 1.15, "기본 공급온도", `${formatNumber(bestSupplyRow ? toNumber(bestSupplyRow.supply_temp_k) : 220.0, 0)} K`, "스윕 최적점", colors.gold);
+    addMetricBox(slide, 3.55, 1.55, 2.35, 1.15, "기본 공급온도", `${formatNumber(bestSupplyRow ? toNumber(bestSupplyRow.supply_temp_k) : 220.0, 0)} K`, bestSupplyRow ? "스윕 최적점" : "feasible point 없음", colors.gold);
     addMetricBox(slide, 6.15, 1.55, 2.35, 1.15, "Core system power", `${formatNumber(toNumber(summary["Core LNG system power"].value), 1)} kW`, "현재 결과", colors.green);
     addSoftBox(slide, 0.95, 3.05, 5.55, 2.65, "암모니아가 기본안인 이유", [
       "실현 가능한 후보 중 루프 동력이 가장 작다.",
@@ -658,13 +679,13 @@ function buildDeck() {
     addSectionHeader(slide, 4, "순환 배관 설계 - 설계 조건", page++);
     addFigure(slide, requireFigure("pipeline_tradeoff.png"), 0.72, 1.55, 5.9, 4.55, "배관 직경에 따른 압력강하와 열유입");
     addBullets(slide, 7.45, 1.55, 5.0, [
-      "기본 설계 거리는 10 km, 도전 조건은 35 km로 둔다.",
+      `기본 설계 거리는 10 km, 도전 조건은 ${formatNumber(longDistanceKm, 0)} km로 둔다.`,
       "배관은 압력강하와 열유입을 동시에 만족해야 한다.",
       "직경이 커지면 압력강하는 줄지만 재료량과 시공 부담이 증가한다.",
       "따라서 배관 설계는 기화기 설계와 별개의 최적화 문제가 된다.",
     ], 16);
     addMetricBox(slide, 7.7, 5.0, 1.7, 0.95, "기본 거리", "10 km", "설계점", colors.teal);
-    addMetricBox(slide, 9.7, 5.0, 1.7, 0.95, "도전 거리", "35 km", "확장 조건", colors.gold);
+    addMetricBox(slide, 9.7, 5.0, 1.7, 0.95, "도전 거리", `${formatNumber(longDistanceKm, 0)} km`, "확장 조건", colors.gold);
     addMetricBox(slide, 11.7, 5.0, 0.9, 0.95, "루프", "왕복", "배관", colors.red);
     addFooterNote(slide, "배관 문제는 압력강하와 열유입을 동시에 관리해야 함");
     finalizeSlide(slide);
@@ -680,7 +701,7 @@ function buildDeck() {
       `거리 증가와 함께 열유입이 누적되며, ${formatNumber(longDistanceKm, 0)} km에서는 ${longDistanceHybridSatisfied ? "유압/상태 해는 유지된다." : "유압 또는 상태 제약에서 막힌다."}`,
       `다만 현재 모델은 부족한 hot-end 환수온도를 supplemental warm-up으로 메우는 부분까지 같이 계산한다.`,
       `현재 코드 기준 최대 하이브리드 편도 성립거리는 약 ${formatNumber(maxFeasibleDistanceKm, 1)} km이고, 기본 LNG duty 기준 최대 성립거리는 약 ${formatNumber(maxBaseDutyDistanceKm, 1)} km다.`,
-      `즉 ${formatNumber(longDistanceKm, 0)} km 조건은 ${longDistanceBaseDutyMeetsLoad ? "기본 LNG duty까지 성립한다." : longDistanceHybridSatisfied ? "하이브리드 성립이지만 기본 LNG duty는 불성립이다." : "하이브리드까지 포함해 불성립이다."}`,
+      `즉 ${formatNumber(longDistanceKm, 0)} km 조건은 ${longDistanceBaseDutyMeetsLoad ? "기본 LNG duty까지 성립한다." : longDistanceHybridSatisfied ? "하이브리드 운전은 가능하지만 기본 LNG duty는 불성립이다." : "하이브리드 운전까지 포함해 불성립이다."}`,
     ], 15.8);
     addMetricBox(slide, 7.7, 5.0, 1.55, 0.95, "10 km", baseDistanceBaseDutyMeetsLoad ? "기본 성립" : baseDistanceHybridSatisfied ? "하이브리드" : "불가", baseDistanceRequiresSupplementalWarmup ? "보조 warm-up 필요" : "기본안", baseDistanceBaseDutyMeetsLoad ? colors.green : baseDistanceHybridSatisfied ? colors.gold : colors.red);
     addMetricBox(slide, 9.5, 5.0, 1.7, 0.95, "하이브리드 한계", `${formatNumber(maxFeasibleDistanceKm, 1)} km`, "편도 추정", colors.gold);
@@ -696,21 +717,25 @@ function buildDeck() {
     addFigure(slide, requireFigure("supply_temperature_sensitivity.png"), 0.72, 1.45, 6.1, 4.75, "공급온도 변화에 따른 유체 선택과 성립거리");
     const temperatureBullets = longDistanceBaseDutyMeetsLoad
       ? [
-          `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`,
+          bestSupplyRow
+            ? `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`
+            : "현재 설정 범위에서는 별도의 feasible 공급온도 최적점이 정의되지 않았다.",
           `현재 기본안만으로도 ${formatNumber(longDistanceKm, 0)} km 조건이 기본 LNG duty 경계 안에서 성립한다.`,
           "따라서 공급온도 스윕은 거리 복구보다 여유와 펌프동력 변화의 trade-off를 읽는 도구가 된다.",
           practicalPassiveRows.length === 0 ? "다만 현실성 필터를 거치면 현재는 채택 가능한 무보조 해가 남지 않는다." : "현실성 필터를 거친 무보조 해도 일부 남아 있어 후속 설계 후보가 된다.",
           "온도 수준이 바뀌면 유체 선택과 최적 거리 여유도 함께 바뀐다.",
         ]
       : [
-          `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`,
+          bestSupplyRow
+            ? `가장 효율적인 지점은 ${formatNumber(bestSupplyRow.supply_temp_k, 0)} K, ${bestSupplyRow.selected_fluid} 기본안이다.`
+            : "현재 설정 범위에서는 별도의 feasible 공급온도 최적점이 정의되지 않았다.",
           `공급온도를 ${formatNumber(recover35Row.supply_temp_k, 0)} K까지 높이면 ${formatNumber(longDistanceKm, 0)} km 기본 LNG duty 조건을 회복할 수 있다.`,
           `하지만 그 과정에서 우선 유체가 ${recover35Row.selected_fluid}로 바뀌고 펌프동력은 크게 증가한다.`,
           practicalPassiveRows.length === 0 ? "또한 무보조 점이 나와도 현실성 필터를 통과하는 해는 아직 없다." : "현실성 필터를 통과하는 무보조 해는 제한적으로만 남는다.",
           "즉 거리 회복은 가능하지만 공짜는 아니다.",
         ];
     addBullets(slide, 7.55, 1.55, 4.9, temperatureBullets, 15.8);
-    addMetricBox(slide, 7.7, 5.0, 1.7, 0.95, "최적점", `${formatNumber(bestSupplyRow.supply_temp_k, 0)} K`, bestSupplyRow.selected_fluid.replace(" (Ammonia)", ""), colors.teal);
+    addMetricBox(slide, 7.7, 5.0, 1.7, 0.95, "최적점", `${formatNumber(displayBestSupplyRow.supply_temp_k, 0)} K`, String(displayBestSupplyRow.selected_fluid || "N/A").replace(" (Ammonia)", ""), colors.teal);
     addMetricBox(
       slide,
       9.55,
@@ -719,10 +744,10 @@ function buildDeck() {
       0.95,
       `${formatNumber(longDistanceKm, 0)} km`,
       longDistanceBaseDutyMeetsLoad ? "기본 성립" : longDistanceHybridSatisfied ? "하이브리드만" : "복구 필요",
-      longDistanceBaseDutyMeetsLoad ? bestSupplyRow.selected_fluid.replace(" (Ammonia)", "") : recover35Row.selected_fluid.replace(" (Ammonia)", ""),
+      longDistanceBaseDutyMeetsLoad ? String(displayBestSupplyRow.selected_fluid || "N/A").replace(" (Ammonia)", "") : String(recover35Row.selected_fluid || "N/A").replace(" (Ammonia)", ""),
       longDistanceBaseDutyMeetsLoad ? colors.green : longDistanceHybridSatisfied ? colors.gold : colors.red
     );
-    addMetricBox(slide, 11.65, 5.0, 0.95, 0.95, "펌프", `${formatNumber(toNumber(bestSupplyRow.pump_power_kw), 0)} kW`, "최적점", colors.red);
+    addMetricBox(slide, 11.65, 5.0, 0.95, 0.95, "펌프", `${formatNumber(toNumber(displayBestSupplyRow.pump_power_kw), 0)} kW`, bestSupplyRow ? "최적점" : "fallback", colors.red);
     addFooterNote(slide, "온도 수준이 곧 거리와 유체 선택을 바꾸는 손잡이");
     finalizeSlide(slide);
   }
@@ -776,13 +801,13 @@ function buildDeck() {
         ? `Transport proxy를 바꾸면 기화기 면적이 ${formatNumber(transportAreaMinDeltaPct, 2)}%~${formatNumber(transportAreaMaxDeltaPct, 2)}% 흔들린다.`
         : "혼합 LNG transport proxy 민감도는 비교 가능한 범위 안에서만 해석했다.",
     ]);
-    addSoftBox(slide, 4.82, 1.45, 3.8, 4.95, "35 km를 정말 목표로 할 경우", [
-      longDistanceBaseDutyMeetsLoad ? "현재 기본안으로도 35 km가 기본 LNG duty 경계 안에서 성립한다." : longDistanceHybridSatisfied ? "현재 35 km는 하이브리드 성립이지만 기본 LNG duty는 부족하다." : "공급온도 수준 조정",
+    addSoftBox(slide, 4.82, 1.45, 3.8, 4.95, `${formatNumber(longDistanceKm, 0)} km를 정말 목표로 할 경우`, [
+      longDistanceBaseDutyMeetsLoad ? `현재 기본안으로도 ${formatNumber(longDistanceKm, 0)} km가 기본 LNG duty 경계 안에서 성립한다.` : longDistanceHybridSatisfied ? `현재 ${formatNumber(longDistanceKm, 0)} km는 하이브리드 운전은 가능하지만 기본 LNG duty는 부족하다.` : "공급온도 수준 조정",
       longDistanceBaseDutyMeetsLoad ? "다만 추가 거리 여유 확보는 별도 최적화 문제다." : "유체 변경(R-600a 방향)",
       longDistanceBaseDutyMeetsLoad ? "열유입 여유와 펌프동력 증가는 계속 trade-off다." : "펌프동력 증가 수용",
       "배관/단열 재최적화",
       "",
-      longDistanceBaseDutyMeetsLoad ? "즉 35 km는 이제 기준안의 성립 영역 안에 들어오지만, 그 이상 확장은 여전히 설계 과제다." : longDistanceHybridSatisfied ? "즉 35 km는 완전 불가가 아니라 하이브리드 해석과 기본 LNG duty 해석을 분리해 읽어야 한다." : "즉 35 km는 기본안이 아니라 별도 설계 과제로 보는 편이 타당하다.",
+      longDistanceBaseDutyMeetsLoad ? `즉 ${formatNumber(longDistanceKm, 0)} km는 이제 기준안의 성립 영역 안에 들어오지만, 그 이상 확장은 여전히 설계 과제다.` : longDistanceHybridSatisfied ? `즉 ${formatNumber(longDistanceKm, 0)} km는 완전 불가가 아니라 하이브리드 해석과 기본 LNG duty 해석을 분리해 읽어야 한다.` : `즉 ${formatNumber(longDistanceKm, 0)} km는 기본안이 아니라 별도 설계 과제로 보는 편이 타당하다.`,
     ]);
     addSoftBox(slide, 8.82, 1.45, 3.68, 4.95, "발표에서 말하면 좋은 점", [
       "안 되는 조건도 설계 결론이다.",
@@ -846,12 +871,12 @@ function buildDeck() {
       "즉 성능과 설계성 모두에서 현재 가장 균형이 좋다.",
     ]);
     addSoftBox(slide, 8.65, 1.8, 3.55, 3.25, "결론 3", [
-      longDistanceBaseDutyMeetsLoad ? "IDC 측 HX와 LNG hot-end 제약을 함께 풀어도 35 km가 현재 기본안의 기본 LNG duty 경계 안에서 성립한다." : longDistanceHybridSatisfied ? "35 km는 하이브리드 운전에서는 성립하지만 기본 LNG duty 경계에서는 불성립한다." : "35 km는 기본안의 단순 연장이 아니라 별도 최적화가 필요한 확장 조건이다.",
+      longDistanceBaseDutyMeetsLoad ? `IDC 측 HX와 LNG hot-end 제약을 함께 풀어도 ${formatNumber(longDistanceKm, 0)} km가 현재 기본안의 기본 LNG duty 경계 안에서 성립한다.` : longDistanceHybridSatisfied ? `${formatNumber(longDistanceKm, 0)} km는 하이브리드 운전에서는 성립하지만 기본 LNG duty 경계에서는 불성립한다.` : `${formatNumber(longDistanceKm, 0)} km는 기본안의 단순 연장이 아니라 별도 최적화가 필요한 확장 조건이다.`,
       longDistanceBaseDutyMeetsLoad ? "따라서 이번 재구축의 메시지는 기존보다 완화된 실제 성립영역을 재계산했다는 데 있다." : "따라서 이번 프로젝트의 진짜 메시지는 ‘가능/불가능의 경계’를 물리적으로 분해해냈다는 데 있다.",
     ]);
-    addMetricBox(slide, 1.25, 5.55, 2.8, 1.02, "기본안", baseDistanceBaseDutyMeetsLoad ? "10 km 기본 성립" : baseDistanceHybridSatisfied ? "10 km 하이브리드 성립" : "10 km 재설계 필요", baseDistanceRequiresSupplementalWarmup ? "보조 warm-up 필요" : "LNG 냉열 활용", baseDistanceBaseDutyMeetsLoad ? colors.green : baseDistanceHybridSatisfied ? colors.gold : colors.red);
-    addMetricBox(slide, 4.45, 5.55, 2.8, 1.02, "경계조건", `${formatNumber(maxFeasibleDistanceKm, 1)} km`, "추정 편도 한계", colors.gold);
-    addMetricBox(slide, 7.65, 5.55, 4.3, 1.02, "확장 판단", `${formatNumber(longDistanceKm, 0)} km ${longDistanceBaseDutyMeetsLoad ? "기본안 성립" : longDistanceHybridSatisfied ? "하이브리드 성립" : "확장 실패"}`, longDistanceBaseDutyMeetsLoad ? "현재 설계 가능" : longDistanceHybridSatisfied ? "보조 warm-up 필요" : "기본안 불성립", longDistanceBaseDutyMeetsLoad ? colors.green : longDistanceHybridSatisfied ? colors.gold : colors.red);
+    addMetricBox(slide, 1.25, 5.55, 2.8, 1.02, "기본안", baseDistanceBaseDutyMeetsLoad ? "10 km 기본 성립" : baseDistanceHybridSatisfied ? "10 km 하이브리드 운전 가능" : "10 km 재설계 필요", baseDistanceRequiresSupplementalWarmup ? "보조 warm-up 필요" : "LNG 냉열 활용", baseDistanceBaseDutyMeetsLoad ? colors.green : baseDistanceHybridSatisfied ? colors.gold : colors.red);
+    addMetricBox(slide, 4.45, 5.55, 2.8, 1.02, "경계조건", `${formatNumber(maxFeasibleDistanceKm, 1)} km`, "추정 하이브리드 편도 한계", colors.gold);
+    addMetricBox(slide, 7.65, 5.55, 4.3, 1.02, "확장 판단", `${formatNumber(longDistanceKm, 0)} km ${longDistanceBaseDutyMeetsLoad ? "기본안 성립" : longDistanceHybridSatisfied ? "하이브리드 운전 가능" : "확장 실패"}`, longDistanceBaseDutyMeetsLoad ? "현재 설계 가능" : longDistanceHybridSatisfied ? "보조 warm-up 필요" : "기본안 불성립", longDistanceBaseDutyMeetsLoad ? colors.green : longDistanceHybridSatisfied ? colors.gold : colors.red);
     addPageNumber(slide, page++);
     addFooterNote(slide, "A11 스타일의 장문형 발표 흐름으로 재구성한 최종 장표");
     finalizeSlide(slide);

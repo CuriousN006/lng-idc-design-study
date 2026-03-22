@@ -181,6 +181,7 @@ def _evaluate_pipeline_case(
     hot_end_margin_k = return_to_lng_temp_k - minimum_return_to_lng_k
     base_duty_margin_kw = base_duty_available_cooling_kw - required_cooling_kw
     thermal_margin_kw = hybrid_available_cooling_kw - required_cooling_kw
+    hybrid_heat_balance_error_kw = thermal_margin_kw
     actual_utilization_fraction = required_cooling_kw / max(actual_lng_duty_kw, 1e-9)
     return_phase = phase_si("T", return_to_lng_temp_k, "P", pressure_pa, fluid)
     hydraulic_feasible = (
@@ -192,7 +193,8 @@ def _evaluate_pipeline_case(
     requires_supplemental_warmup = supplemental_reheat_kw > tolerance_kw
     within_design_lng_duty = actual_lng_duty_kw <= total_lng_duty_kw + tolerance_kw
     base_duty_meets_idc_load = hydraulic_feasible and base_duty_margin_kw >= -tolerance_kw
-    hybrid_load_satisfied = hydraulic_feasible and thermal_margin_kw >= -tolerance_kw
+    hybrid_operation_feasible = hydraulic_feasible
+    hybrid_load_satisfied = hybrid_operation_feasible
 
     return {
         "distance_m": distance_m,
@@ -210,6 +212,8 @@ def _evaluate_pipeline_case(
         "heat_gain_fraction": heat_gain_fraction,
         "supplemental_warmup_kw": supplemental_reheat_kw,
         "requires_supplemental_warmup": requires_supplemental_warmup,
+        "base_lng_duty_kw": total_lng_duty_kw,
+        "hybrid_requested_lng_duty_kw": actual_lng_duty_kw,
         "actual_lng_duty_kw": actual_lng_duty_kw,
         "actual_utilization_fraction": actual_utilization_fraction,
         "pump_power_kw": pump_power_w / 1000.0,
@@ -217,6 +221,7 @@ def _evaluate_pipeline_case(
         "hybrid_available_cooling_kw": hybrid_available_cooling_kw,
         "base_duty_available_cooling_kw": base_duty_available_cooling_kw,
         "thermal_margin_kw": thermal_margin_kw,
+        "hybrid_heat_balance_error_kw": hybrid_heat_balance_error_kw,
         "base_duty_margin_kw": base_duty_margin_kw,
         "design_target_margin_kw": design_target_margin_kw,
         "return_to_lng_temp_k": return_to_lng_temp_k,
@@ -226,6 +231,7 @@ def _evaluate_pipeline_case(
         "meets_utilization_target": within_design_lng_duty,
         "within_design_lng_duty": within_design_lng_duty,
         "base_duty_meets_idc_load": base_duty_meets_idc_load,
+        "hybrid_operation_feasible": hybrid_operation_feasible,
         "hybrid_load_satisfied": hybrid_load_satisfied,
         "hydraulic_feasible": hydraulic_feasible,
         "feasible": hydraulic_feasible,
@@ -521,12 +527,22 @@ def design_pipeline(
                 rows.append(row)
 
     frame = pd.DataFrame(rows).sort_values(
-        ["feasible", "pump_power_kw", "supplemental_warmup_kw", "heat_gain_kw"],
-        ascending=[False, True, True, True],
+        [
+            "base_duty_meets_idc_load",
+            "feasible",
+            "requires_supplemental_warmup",
+            "supplemental_warmup_kw",
+            "pump_power_kw",
+            "heat_gain_kw",
+        ],
+        ascending=[False, False, True, True, True, True],
     )
     if not bool(frame["feasible"].any()):
         raise RuntimeError("No feasible pipeline design found in search grid.")
-    selected = frame[frame["feasible"]].iloc[0].to_dict()
+    selected_hybrid = frame[frame["feasible"]].iloc[0].to_dict()
+    base_duty_designs = frame[frame["base_duty_meets_idc_load"]]
+    selected_base_duty = base_duty_designs.iloc[0].to_dict() if not base_duty_designs.empty else None
+    selected = selected_base_duty or selected_hybrid
 
     distance_candidates = config.get("sensitivity", {}).get(
         "distance_candidates_m",
@@ -598,6 +614,8 @@ def design_pipeline(
     return {
         "scan_table": frame.reset_index(drop=True),
         "selected_design": selected,
+        "selected_hybrid_design": selected_hybrid,
+        "selected_base_duty_design": selected_base_duty,
         "sensitivity": sensitivity,
         "target_heat_gain_kw": total_lng_duty_kw - required_cooling_kw,
         "base_distance_m": config["assignment"]["pipeline_distance_m"],

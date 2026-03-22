@@ -82,3 +82,4 @@
 | ASM-076 | Waste-heat recovery auxiliary O&M fraction | 2.5% of auxiliary CAPEX/year | 회수 루프와 추가 열교환기, 펌프 유지관리를 반영한 보수적 O&M 가정 |
 | ASM-077 | Heat-pump booster O&M fraction | 3.5% of auxiliary CAPEX/year | 압축기 기반 booster의 상대적으로 높은 정비 부담을 단순 승수로 반영 |
 | ASM-078 | LNG transport-proxy sensitivity set | Methane, Ethane, Propane, configured mixture | 혼합 LNG 엔탈피 모델은 유지하되 tube-side transport property proxy 선택이 기화기 면적과 압력강하에 미치는 영향을 bounded sensitivity로 확인하기 위한 비교 세트 |
+| ASM-079 | IDC secondary-loop granularity sensitivity set | compact / baseline / conservative / redundant equivalent-network scenarios | 등가 배관망의 헤더 비중, 병렬 회로 수, 단말 손실을 바꿔 2차 루프 펌프동력의 모델 형태 민감도를 확인하기 위한 시나리오 세트 |

@@ -84,7 +84,7 @@ class SmokeTest(unittest.TestCase):
         self.assertGreater(idc_hx_result["required_area_m2"], 0.0)
         self.assertGreaterEqual(idc_hx_result["min_pinch_k"], self.config["assignment"]["minimum_temperature_approach_k"])
         self.assertGreater(idc_hx_result["coolant_after_idc_temp_k"], self.config["coolant_loop"]["supply_temp_k"])
-        self.assertGreater(idc_hx_result["minimum_return_to_lng_k"], idc_hx_result["coolant_after_idc_temp_k"])
+        self.assertGreaterEqual(idc_hx_result["minimum_return_to_lng_k"], idc_hx_result["coolant_after_idc_temp_k"])
         self.assertGreaterEqual(idc_hx_result["minimum_line_heat_gain_required_kw"], 0.0)
         self.assertGreater(float(idc_secondary_loop_result["selected_design"]["pump_power_kw"]), 0.0)
         self.assertGreater(float(idc_secondary_loop_result["selected_design"]["total_pressure_drop_kpa"]), 0.0)
@@ -113,7 +113,7 @@ class SmokeTest(unittest.TestCase):
             (distance_scenarios["distance_m"] - float(self.config["assignment"]["pipeline_distance_m"])).abs() < 1e-6
         ].iloc[0]
         self.assertTrue(bool(base_distance_row["hydraulic_feasible"]))
-        self.assertTrue(bool(base_distance_row["hybrid_load_satisfied"]))
+        self.assertTrue(bool(base_distance_row["hybrid_operation_feasible"]))
         self.assertGreater(float(base_distance_row["supplemental_warmup_kw"]), 0.0)
         self.assertLess(float(base_distance_row["base_duty_margin_kw"]), 0.0)
         self.assertFalse(bool(base_distance_row["base_duty_meets_idc_load"]))
@@ -123,7 +123,7 @@ class SmokeTest(unittest.TestCase):
             (distance_scenarios["distance_m"] - target_distance_m).abs() < 1e-6
         ].iloc[0]
         self.assertTrue(bool(long_distance_row["hydraulic_feasible"]))
-        self.assertTrue(bool(long_distance_row["hybrid_load_satisfied"]))
+        self.assertTrue(bool(long_distance_row["hybrid_operation_feasible"]))
         self.assertGreater(float(long_distance_row["supplemental_warmup_kw"]), 0.0)
         self.assertLess(float(long_distance_row["base_duty_margin_kw"]), 0.0)
         self.assertFalse(bool(long_distance_row["base_duty_meets_idc_load"]))
@@ -177,13 +177,41 @@ class SmokeTest(unittest.TestCase):
         report_text = built["report"].read_text(encoding="utf-8")
         script_text = built["script"].read_text(encoding="utf-8")
         self.assertNotIn("Baseline compressor power vs LNG loop pump power only", report_text)
-        self.assertIn("하이브리드 성립, 기본 LNG duty 불성립", report_text)
-        self.assertIn("하이브리드 성립, 기본 LNG duty 불성립", script_text)
+        self.assertIn("하이브리드 운전 가능, 기본 LNG duty 불성립", report_text)
+        self.assertIn("하이브리드 운전은 가능하지만 기본 LNG duty는 불성립", script_text)
         self.assertIn("혼합 LNG transport proxy 민감도", report_text)
         self.assertIn("IDC 2차 루프 등가망 민감도", report_text)
         self.assertIn("보조 열원까지 포함한 재무 최선", script_text)
         self.assertTrue((self.project_root / "output" / "lng_transport_sensitivity.csv").exists())
         self.assertTrue((self.project_root / "output" / "idc_secondary_granularity.csv").exists())
+
+    def test_build_report_targets_configured_long_distance_not_last_row(self) -> None:
+        run_all(self.project_root / "config" / "base.toml", parallel=False)
+        distance_path = self.project_root / "output" / "distance_scenarios.csv"
+        frame = pd.read_csv(distance_path)
+        extra_row = frame.sort_values("distance_m").iloc[-1].copy()
+        extra_row["distance_m"] = 50_000.0
+        extra_row["distance_km"] = 50.0
+        pd.concat([frame, pd.DataFrame([extra_row])], ignore_index=True).to_csv(distance_path, index=False)
+
+        built = build_deliverables(self.project_root)
+        report_text = built["report"].read_text(encoding="utf-8")
+        script_text = built["script"].read_text(encoding="utf-8")
+        self.assertIn("35 km", report_text)
+        self.assertIn("35 km", script_text)
+
+    def test_idc_hx_allows_zero_line_heat_gain_case(self) -> None:
+        trial_config = deepcopy(self.config)
+        trial_config["assignment"]["ng_outlet_temp_k"] = 250.0
+        load_result = compute_load_model(trial_config)
+        screening = compute_fluid_screening(trial_config, load_result.total_kw)
+        result = evaluate_idc_heat_exchange(
+            trial_config,
+            screening["selected"]["coolprop_name"],
+            load_result.total_kw,
+        )
+        self.assertTrue(bool(result["idc_outlet_meets_hot_end_requirement"]))
+        self.assertAlmostEqual(float(result["minimum_line_heat_gain_required_kw"]), 0.0, places=6)
 
     def test_pipeline_thermal_case_extensions(self) -> None:
         load_result = compute_load_model(self.config)

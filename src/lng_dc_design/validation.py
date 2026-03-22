@@ -125,8 +125,8 @@ def validate_run(
     long_distance = long_distance_rows.iloc[0]
     if bool(long_distance["base_duty_meets_idc_load"]):
         messages.append("Long-distance pipeline case satisfies the IDC load within the configured base LNG-duty boundary.")
-    elif bool(long_distance["hybrid_load_satisfied"]):
-        messages.append("Long-distance pipeline case is hydraulically/state feasible only when supplemental warm-up and redefined LNG duty are allowed.")
+    elif bool(long_distance.get("hybrid_operation_feasible", long_distance["hybrid_load_satisfied"])):
+        messages.append("Long-distance pipeline case is hydraulically/state operable only when supplemental warm-up and redefined LNG duty are allowed.")
     else:
         messages.append("Long-distance pipeline case is hydraulically infeasible under the current pressure/phase constraints.")
     messages.append(f"Estimated maximum hydraulic/state-feasible one-way pipeline distance is about {pipeline_result['max_feasible_distance_m'] / 1000.0:.1f} km.")

@@ -57,6 +57,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
     supply_temperature_sweep = evaluate_supply_temperature_sweep(values, load_result, baseline, parallel_options=parallel_options)
     ambient_closure_map = evaluate_ambient_closure_map(values, load_result, baseline, parallel_options=parallel_options)
     zero_warmup_target_search = evaluate_zero_warmup_target_search(values, load_result, baseline, parallel_options=parallel_options)
+    passive_zero_warmup_search = evaluate_passive_zero_warmup_search(values, parallel_options=parallel_options)
     lng_transport_sensitivity = evaluate_lng_transport_sensitivity(values, screening, pipeline_result)
     idc_secondary_granularity = evaluate_idc_secondary_loop_granularity(values, idc_hx_result["chilled_water_mass_flow_kg_s"])
     system_eval = evaluate_system(
@@ -100,6 +101,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         supply_temperature_sweep,
         ambient_closure_map,
         zero_warmup_target_search,
+        passive_zero_warmup_search,
         lng_transport_sensitivity,
         idc_secondary_granularity,
         system_eval,
@@ -121,6 +123,7 @@ def run_all(config_path: Path, *, workers: int | None = None, parallel: bool = T
         "supply_temperature_sweep": supply_temperature_sweep,
         "ambient_closure_map": ambient_closure_map,
         "zero_warmup_target_search": zero_warmup_target_search,
+        "passive_zero_warmup_search": passive_zero_warmup_search,
         "lng_transport_sensitivity": lng_transport_sensitivity,
         "idc_secondary_granularity": idc_secondary_granularity,
         "system": system_eval,

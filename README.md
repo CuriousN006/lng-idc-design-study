@@ -27,6 +27,8 @@ python -m lng_dc_design analyze-aux-heat --config config/base.toml
 python -m lng_dc_design scenario-study --config config/base.toml
 python -m lng_dc_design explore-passive-heat --config config/base.toml
 python -m lng_dc_design uncertainty-study --config config/base.toml
+python -m lng_dc_design analyze-lng-proxy --config config/base.toml
+python -m lng_dc_design analyze-idc-network --config config/base.toml
 python -m lng_dc_design build-report --config config/base.toml
 python -m lng_dc_design build-slides --config config/base.toml
 python -m lng_dc_design build-deliverables --config config/base.toml
@@ -43,19 +45,32 @@ python -m lng_dc_design validate --config config/base.toml
 - `output/alternative_designs.csv`
 - `output/distance_scenarios.csv`
 - `output/supply_temperature_sweep.csv`
+- `output/ambient_closure_map.csv`
+- `output/zero_warmup_target_search.csv`
+- `output/passive_zero_warmup_search.csv`
 - `output/annual_summary.csv`
 - `output/auxiliary_heat_sources.csv`
 - `output/capex_breakdown.csv`
 - `output/financial_summary.csv`
+- `output/baseline_cycle_points.csv`
+- `output/idc_hx_profile.csv`
 - `output/idc_secondary_loop_scan.csv`
+- `output/lng_transport_sensitivity.csv`
+- `output/idc_secondary_granularity.csv`
+- `output/hx_segments.csv`
+- `output/hx_geometry_candidates_top100.csv`
+- `output/pipeline_scan_top200.csv`
+- `output/pipeline_sensitivity.csv`
+- `output/legacy_comparison.csv`
 - `output/uncertainty_samples.csv`
 - `output/uncertainty_summary.csv`
 - `output/payback_allowable_capex.csv`
 - `output/requirement_traceability.csv`
+- `output/requirement_traceability.md`
 - `output/source_map.csv`
 - `output/report_summary.md`
 - `output/figures/*.png`
 - `deliverables/report_draft.md`
 - `deliverables/presentation_script.md`
 - `deliverables/presentation_draft.pptx`
-- `deliverables/slides_src/presentation_draft.js`
+- `deliverables/slides_src/presentation_academic_draft.js`
